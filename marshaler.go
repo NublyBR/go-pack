@@ -2,10 +2,11 @@ package pack
 
 import "bytes"
 
-func Marshal(data any) ([]byte, error) {
+// Pack object into bytes
+func Marshal(data any, options ...Options) ([]byte, error) {
 	var buf = bytes.NewBuffer(nil)
 
-	err := NewPacker(buf).Encode(data)
+	err := NewPacker(buf, options...).Encode(data)
 	if err != nil {
 		return nil, err
 	}
@@ -13,6 +14,7 @@ func Marshal(data any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func Unmarshal(b []byte, data any) error {
-	return NewUnpacker(bytes.NewBuffer(b)).Decode(data)
+// Unpack object from bytes
+func Unmarshal(b []byte, data any, options ...Options) error {
+	return NewUnpacker(bytes.NewBuffer(b), options...).Decode(data)
 }

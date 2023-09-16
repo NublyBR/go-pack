@@ -8,11 +8,14 @@ import (
 )
 
 type Packer interface {
+	// Encode object into stream
+	//
+	// Note: If a pointer is given to the encoder (*obj), then the decoder needs to receive a pointer to a pointer (**obj)
+	// (unless object mode is enabled in the options)
 	Encode(data any) error
 
+	// Total bytes written to the underlying stream
 	BytesWritten() uint64
-
-	WithObjects(Objects) Packer
 }
 
 type packer struct {
@@ -22,8 +25,16 @@ type packer struct {
 	objects Objects
 }
 
-func NewPacker(writer io.Writer) Packer {
-	return &packer{writer: writer}
+func NewPacker(writer io.Writer, options ...Options) Packer {
+	p := &packer{writer: writer}
+
+	for _, opt := range options {
+		if opt.WithObjects != nil {
+			p.objects = opt.WithObjects
+		}
+	}
+
+	return p
 }
 
 func (p *packer) Encode(data any) error {
@@ -56,11 +67,6 @@ func (p *packer) Encode(data any) error {
 
 func (p *packer) BytesWritten() uint64 {
 	return p.written
-}
-
-func (p *packer) WithObjects(o Objects) Packer {
-	p.objects = o
-	return p
 }
 
 func (p *packer) encodeBytes(data []byte, inf packerInfo) (int, error) {

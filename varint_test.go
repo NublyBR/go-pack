@@ -36,11 +36,11 @@ func TestVarInt(t *testing.T) {
 		}
 
 		if input != output {
-			t.Errorf("Expected result from readVarUint(...) to be the same as input to writeVarUint(...): got %d, expected %d", output, input)
+			t.Errorf("Expected result from readVarInt(...) to be the same as input to writeVarInt(...): got %d, expected %d", output, input)
 		}
 
 		if written != read {
-			t.Errorf("Expected bytes read by readVarUint(...) to be the same as bytes written by writeVarUint(...): got %d, expected %d", read, written)
+			t.Errorf("Expected bytes read by readVarInt(...) to be the same as bytes written by writeVarInt(...): got %d, expected %d", read, written)
 		}
 	}
 }

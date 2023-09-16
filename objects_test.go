@@ -32,12 +32,14 @@ func TestObjects(t *testing.T) {
 	}
 
 	var (
-		objects = NewObjects(objectA{}, objectB{}, objectC{}, recursiveObject{})
+		options = Options{
+			WithObjects: NewObjects(objectA{}, objectB{}, objectC{}, recursiveObject{}),
+		}
 
 		buf = bytes.NewBuffer(nil)
 
-		packer   = NewPacker(buf).WithObjects(objects)
-		unpacker = NewUnpacker(buf).WithObjects(objects)
+		packer   = NewPacker(buf, options)
+		unpacker = NewUnpacker(buf, options)
 
 		inputs = []any{
 			objectA{Val: "Hello"},

@@ -10,11 +10,11 @@ import (
 var typePointerToInterface = reflect.PointerTo(reflect.TypeOf([]any{}).Elem())
 
 type Unpacker interface {
+	// Decode object on stream into a pointer
 	Decode(data any) error
 
+	// Total bytes read from the underlying stream
 	BytesRead() uint64
-
-	WithObjects(Objects) Unpacker
 }
 
 type unpacker struct {
@@ -25,8 +25,16 @@ type unpacker struct {
 	objects Objects
 }
 
-func NewUnpacker(reader io.Reader) Unpacker {
-	return &unpacker{reader: reader, maxalloc: 0xffff_ffff}
+func NewUnpacker(reader io.Reader, options ...Options) Unpacker {
+	u := &unpacker{reader: reader, maxalloc: 0xffff_ffff}
+
+	for _, opt := range options {
+		if opt.WithObjects != nil {
+			u.objects = opt.WithObjects
+		}
+	}
+
+	return u
 }
 
 func (u *unpacker) Decode(data any) error {
@@ -72,11 +80,6 @@ func (u *unpacker) Decode(data any) error {
 
 func (u *unpacker) BytesRead() uint64 {
 	return u.read
-}
-
-func (u *unpacker) WithObjects(o Objects) Unpacker {
-	u.objects = o
-	return u
 }
 
 func (u *unpacker) decodeBytes(ln uint64, info packerInfo) ([]byte, int, error) {
