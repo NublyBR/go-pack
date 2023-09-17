@@ -2,6 +2,7 @@ package pack
 
 import (
 	"bytes"
+	"io"
 	"reflect"
 	"testing"
 )
@@ -186,5 +187,81 @@ func TestIgnore(t *testing.T) {
 
 	if dst.Value != "" {
 		t.Errorf("expected ignored field to be empty, got %q", dst.Value)
+	}
+}
+
+func BenchmarkPacker(b *testing.B) {
+	type object struct {
+		String string
+		Int    int
+		Float  float64
+		Slice  []any
+		Map    map[string]any
+	}
+
+	var (
+		input = object{
+			String: "Hello, World!",
+			Int:    1337_1337,
+			Float:  1337.1337,
+			Slice:  []any{"Hello, World!", 1337_1337, 1337.1337},
+			Map: map[string]any{
+				"abc": 1337_1337,
+				"def": 1337.1337,
+			},
+		}
+
+		buffer = bytes.NewBuffer(nil)
+
+		packer = NewPacker(buffer)
+	)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		if err := packer.Encode(input); err != nil {
+			b.Error(err)
+		}
+
+		buffer.Reset()
+	}
+}
+
+func BenchmarkUnpacker(b *testing.B) {
+	type object struct {
+		String string
+		Int    int
+		Float  float64
+		Slice  []any
+		Map    map[string]any
+	}
+
+	var (
+		input, _ = Marshal(object{
+			String: "Hello, World!",
+			Int:    1337_1337,
+			Float:  1337.1337,
+			Slice:  []any{"Hello, World!", 1337_1337, 1337.1337},
+			Map: map[string]any{
+				"abc": 1337_1337,
+				"def": 1337.1337,
+			},
+		})
+
+		output object
+
+		buffer = bytes.NewReader(input)
+
+		unpacker = NewUnpacker(buffer)
+	)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		if err := unpacker.Decode(&output); err != nil {
+			b.Error(err)
+		}
+
+		buffer.Seek(0, io.SeekStart)
 	}
 }

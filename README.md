@@ -51,3 +51,33 @@ func main() {
 ```
 go get -u github.com/NublyBR/go-pack
 ```
+
+# 📈 Benchmarks
+
+```
+$ go test -benchmem -bench=.
+
+goos: windows
+goarch: amd64
+pkg: github.com/NublyBR/go-pack
+cpu: Intel(R) Core(TM) i5-9600K CPU @ 3.70GHz
+BenchmarkPacker-6         552862              1927 ns/op             488 B/op       55 allocs/op
+BenchmarkUnpacker-6       438651              2644 ns/op             936 B/op       63 allocs/op
+PASS
+ok      github.com/NublyBR/go-pack      2.390s
+```
+
+The benchmarks are executed by packing/unpacking the following struct:
+
+```go
+{
+    String: "Hello, World!",
+    Int:    1337_1337,
+    Float:  1337.1337,
+    Slice:  []any{"Hello, World!", 1337_1337, 1337.1337},
+    Map: map[string]any{
+        "abc": 1337_1337,
+        "def": 1337.1337,
+    },
+}
+```
