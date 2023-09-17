@@ -614,6 +614,18 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 			}
 		}
 
+		if val.CanAddr() && reflect.PointerTo(typ).Implements(interfaceAfterUnpack) {
+			err := val.Addr().Interface().(AfterUnpack).AfterUnpack()
+			if err != nil {
+				return total, err
+			}
+		} else if typ.Implements(interfaceAfterUnpack) {
+			err := val.Interface().(AfterUnpack).AfterUnpack()
+			if err != nil {
+				return total, err
+			}
+		}
+
 		return total, nil
 
 	}

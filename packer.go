@@ -427,6 +427,19 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 		return total, nil
 
 	case reflect.Struct:
+
+		if val.CanAddr() && reflect.PointerTo(typ).Implements(interfaceBeforePack) {
+			err := val.Addr().Interface().(BeforePack).BeforePack()
+			if err != nil {
+				return total, err
+			}
+		} else if typ.Implements(interfaceBeforePack) {
+			err := val.Interface().(BeforePack).BeforePack()
+			if err != nil {
+				return total, err
+			}
+		}
+
 		ln := typ.NumField()
 
 		for i := 0; i < ln; i++ {
