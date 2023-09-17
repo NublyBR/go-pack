@@ -21,7 +21,7 @@ type unpacker struct {
 	reader   io.Reader
 	maxalloc uint64
 	read     uint64
-	buffer   [10]byte
+	buffer   dataBuffer
 
 	objects Objects
 }
@@ -289,19 +289,17 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 		val = reflect.ValueOf(data).Elem()
 
 		total int
-
-		buf [8]byte
 	)
 
 	switch typ.Kind() {
 	case reflect.Pointer:
-		n, err := u.reader.Read(buf[:1])
+		n, err := u.reader.Read(u.buffer[:1])
 		total += n
 		if err != nil {
 			return total, err
 		}
 
-		if buf[0] == 0 {
+		if u.buffer[0] == 0 {
 			return total, nil
 		}
 
@@ -318,7 +316,7 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 		return total, nil
 
 	case reflect.Bool, reflect.Int8, reflect.Uint8:
-		n, err := u.reader.Read(buf[:1])
+		n, err := u.reader.Read(u.buffer[:1])
 		total += n
 		if err != nil {
 			return total, err
@@ -327,17 +325,17 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 		switch typ.Kind() {
 
 		case reflect.Bool:
-			if buf[0] == 0 {
+			if u.buffer[0] == 0 {
 				val.SetBool(false)
 			} else {
 				val.SetBool(true)
 			}
 
 		case reflect.Int8:
-			val.SetInt(int64(buf[0]))
+			val.SetInt(int64(u.buffer[0]))
 
 		case reflect.Uint8:
-			val.SetUint(uint64(buf[0]))
+			val.SetUint(uint64(u.buffer[0]))
 
 		}
 
@@ -370,37 +368,37 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 		return total, nil
 
 	case reflect.Float32:
-		n, err := io.ReadFull(u.reader, buf[0:4])
+		n, err := io.ReadFull(u.reader, u.buffer[0:4])
 		total += n
 		if err != nil {
 			return total, err
 		}
 
-		val.SetFloat(float64(math.Float32frombits(binary.BigEndian.Uint32(buf[0:4]))))
+		val.SetFloat(float64(math.Float32frombits(binary.BigEndian.Uint32(u.buffer[0:4]))))
 
 		return total, nil
 
 	case reflect.Float64:
-		n, err := io.ReadFull(u.reader, buf[0:8])
+		n, err := io.ReadFull(u.reader, u.buffer[0:8])
 		total += n
 		if err != nil {
 			return total, err
 		}
 
-		val.SetFloat(math.Float64frombits(binary.BigEndian.Uint64(buf[0:8])))
+		val.SetFloat(math.Float64frombits(binary.BigEndian.Uint64(u.buffer[0:8])))
 
 		return total, nil
 
 	case reflect.Complex64:
-		n, err := io.ReadFull(u.reader, buf[0:8])
+		n, err := io.ReadFull(u.reader, u.buffer[0:8])
 		total += n
 		if err != nil {
 			return total, err
 		}
 
 		var (
-			r = float64(math.Float32frombits(binary.BigEndian.Uint32(buf[0:4])))
-			i = float64(math.Float32frombits(binary.BigEndian.Uint32(buf[4:8])))
+			r = float64(math.Float32frombits(binary.BigEndian.Uint32(u.buffer[0:4])))
+			i = float64(math.Float32frombits(binary.BigEndian.Uint32(u.buffer[4:8])))
 		)
 
 		val.SetComplex(complex(r, i))
@@ -408,21 +406,21 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 		return total, nil
 
 	case reflect.Complex128:
-		n, err := io.ReadFull(u.reader, buf[0:8])
+		n, err := io.ReadFull(u.reader, u.buffer[0:8])
 		total += n
 		if err != nil {
 			return total, err
 		}
 
-		var r = math.Float64frombits(binary.BigEndian.Uint64(buf[0:8]))
+		var r = math.Float64frombits(binary.BigEndian.Uint64(u.buffer[0:8]))
 
-		n, err = io.ReadFull(u.reader, buf[0:8])
+		n, err = io.ReadFull(u.reader, u.buffer[0:8])
 		total += n
 		if err != nil {
 			return total, err
 		}
 
-		var i = math.Float64frombits(binary.BigEndian.Uint64(buf[0:8]))
+		var i = math.Float64frombits(binary.BigEndian.Uint64(u.buffer[0:8]))
 
 		val.SetComplex(complex(r, i))
 

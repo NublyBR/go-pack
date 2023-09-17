@@ -2,6 +2,8 @@ package pack
 
 import "reflect"
 
+type dataBuffer [10]byte
+
 var canEncodeInInterface = map[reflect.Kind]bool{
 	reflect.Bool:          true,
 	reflect.Int:           true,

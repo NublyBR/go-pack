@@ -7,7 +7,7 @@ import (
 
 func TestVarUint(t *testing.T) {
 	var (
-		b [10]byte
+		b dataBuffer
 
 		buf = bytes.NewBuffer(nil)
 

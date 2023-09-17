@@ -21,7 +21,7 @@ type Packer interface {
 type packer struct {
 	writer  io.Writer
 	written uint64
-	buffer  [10]byte
+	buffer  dataBuffer
 
 	objects Objects
 }
