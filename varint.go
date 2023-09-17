@@ -2,7 +2,7 @@ package pack
 
 import "io"
 
-func writeVarInt(w io.Writer, i int64) (int, error) {
+func writeVarInt(w io.Writer, i int64, buf []byte) (int, error) {
 	var (
 		total int
 	)
@@ -26,50 +26,40 @@ func writeVarInt(w io.Writer, i int64) (int, error) {
 			flag |= 0x80
 		}
 
-		n, err := w.Write([]byte{byte(i&0x3f) | flag})
-		if err != nil {
-			return total, err
-		}
-		total += n
+		buf[total] = byte(i&0x3f) | flag
+		total++
 
 		i >>= 6
 
 		if i == 0 {
-			return total, nil
+			return w.Write(buf[:total])
 		}
 	}
 
 	for i > 0x7f {
-		n, err := w.Write([]byte{byte(i&0x7f) | 0x80})
-		if err != nil {
-			return total, err
-		}
-		total += n
+		buf[total] = byte(i&0x7f) | 0x80
+		total++
 
 		i >>= 7
 	}
 
-	n, err := w.Write([]byte{byte(i & 0x7f)})
-	if err != nil {
-		return total, err
-	}
-	total += n
+	buf[total] = byte(i & 0x7f)
+	total++
 
-	return total, nil
+	return w.Write(buf[:total])
 }
 
-func readVarInt(r io.Reader, i *int64) (int, error) {
+func readVarInt(r io.Reader, i *int64, buf []byte) (int, error) {
 	var (
 		total  int
 		offset int
 		result int64
-		buf    = []byte{0}
 
 		isNegative bool
 	)
 
 	{
-		n, err := r.Read(buf)
+		n, err := r.Read(buf[:1])
 		if err != nil {
 			return total, err
 		}
@@ -94,7 +84,7 @@ func readVarInt(r io.Reader, i *int64) (int, error) {
 	}
 
 	for {
-		n, err := r.Read(buf)
+		n, err := r.Read(buf[:1])
 		if err != nil {
 			return total, err
 		}

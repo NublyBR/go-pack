@@ -7,6 +7,8 @@ import (
 
 func TestVarUint(t *testing.T) {
 	var (
+		b [10]byte
+
 		buf = bytes.NewBuffer(nil)
 
 		output uint64
@@ -24,12 +26,12 @@ func TestVarUint(t *testing.T) {
 
 		buf.Reset()
 
-		written, err := writeVarUint(buf, input)
+		written, err := writeVarUint(buf, input, b[:])
 		if err != nil {
 			t.Error(err)
 		}
 
-		read, err := readVarUint(buf, &output)
+		read, err := readVarUint(buf, &output, b[:])
 		if err != nil {
 			t.Error(err)
 		}

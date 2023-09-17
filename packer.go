@@ -21,6 +21,7 @@ type Packer interface {
 type packer struct {
 	writer  io.Writer
 	written uint64
+	buffer  [10]byte
 
 	objects Objects
 }
@@ -46,7 +47,7 @@ func (p *packer) Encode(data any) error {
 			return &ErrNotDefined{typ: reflect.TypeOf(data)}
 		}
 
-		n, err := writeVarUint(p.writer, uint64(oid))
+		n, err := writeVarUint(p.writer, uint64(oid), p.buffer[:])
 		p.written += uint64(n)
 		if err != nil {
 			return err
@@ -76,7 +77,7 @@ func (p *packer) encodeBytes(data []byte, inf packerInfo) (int, error) {
 		return total, &ErrDataTooLarge{typ: reflect.TypeOf(data), max: inf.maxSize, size: uint64(len(data))}
 	}
 
-	n, err := writeVarUint(p.writer, uint64(len(data)))
+	n, err := writeVarUint(p.writer, uint64(len(data)), p.buffer[:])
 	total += n
 	if err != nil {
 		return total, err
@@ -124,7 +125,7 @@ func (p *packer) encodeType(typ reflect.Type) (int, error) {
 		}
 
 	case reflect.Array:
-		n, err := writeVarUint(p.writer, uint64(typ.Len()))
+		n, err := writeVarUint(p.writer, uint64(typ.Len()), p.buffer[:])
 		total += n
 		if err != nil {
 			return total, err
@@ -170,8 +171,6 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 		val = reflect.ValueOf(data)
 
 		total int
-
-		buffer [8]byte
 	)
 
 	if info.markType {
@@ -251,7 +250,7 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 			value = int64(cast)
 		}
 
-		n, err := writeVarInt(p.writer, value)
+		n, err := writeVarInt(p.writer, value, p.buffer[:])
 		total += n
 		return total, err
 
@@ -271,44 +270,44 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 			value = uint64(cast)
 		}
 
-		n, err := writeVarUint(p.writer, value)
+		n, err := writeVarUint(p.writer, value, p.buffer[:])
 		total += n
 		return total, err
 
 	case reflect.Float32:
-		binary.BigEndian.PutUint32(buffer[0:4], math.Float32bits(val.Interface().(float32)))
+		binary.BigEndian.PutUint32(p.buffer[0:4], math.Float32bits(val.Interface().(float32)))
 
-		n, err := p.writer.Write(buffer[0:4])
+		n, err := p.writer.Write(p.buffer[0:4])
 		total += n
 		return total, err
 
 	case reflect.Float64:
-		binary.BigEndian.PutUint64(buffer[0:8], math.Float64bits(val.Interface().(float64)))
+		binary.BigEndian.PutUint64(p.buffer[0:8], math.Float64bits(val.Interface().(float64)))
 
-		n, err := p.writer.Write(buffer[0:8])
+		n, err := p.writer.Write(p.buffer[0:8])
 		total += n
 		return total, err
 
 	case reflect.Complex64:
 		complex := val.Interface().(complex64)
-		binary.BigEndian.PutUint32(buffer[0:4], math.Float32bits(real(complex)))
-		binary.BigEndian.PutUint32(buffer[4:8], math.Float32bits(imag(complex)))
+		binary.BigEndian.PutUint32(p.buffer[0:4], math.Float32bits(real(complex)))
+		binary.BigEndian.PutUint32(p.buffer[4:8], math.Float32bits(imag(complex)))
 
-		n, err := p.writer.Write(buffer[:8])
+		n, err := p.writer.Write(p.buffer[:8])
 		total += n
 		return total, err
 
 	case reflect.Complex128:
 		complex := val.Interface().(complex128)
-		binary.BigEndian.PutUint64(buffer[0:8], math.Float64bits(real(complex)))
-		n, err := p.writer.Write(buffer[:8])
+		binary.BigEndian.PutUint64(p.buffer[0:8], math.Float64bits(real(complex)))
+		n, err := p.writer.Write(p.buffer[:8])
 		total += n
 		if err != nil {
 			return total, err
 		}
 
-		binary.BigEndian.PutUint64(buffer[0:8], math.Float64bits(imag(complex)))
-		n, err = p.writer.Write(buffer[:8])
+		binary.BigEndian.PutUint64(p.buffer[0:8], math.Float64bits(imag(complex)))
+		n, err = p.writer.Write(p.buffer[:8])
 		total += n
 		if err != nil {
 			return total, err
@@ -347,7 +346,7 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 			ln = -1
 		}
 
-		n, err := writeVarInt(p.writer, int64(ln))
+		n, err := writeVarInt(p.writer, int64(ln), p.buffer[:])
 		total += n
 		if err != nil {
 			return total, err
@@ -400,7 +399,7 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 			return total, &ErrDataTooLarge{typ: typ, max: info.maxSize, size: uint64(ln)}
 		}
 
-		n, err := writeVarUint(p.writer, uint64(ln))
+		n, err := writeVarUint(p.writer, uint64(ln), p.buffer[:])
 		total += n
 		if err != nil {
 			return total, err

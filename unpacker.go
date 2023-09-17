@@ -21,6 +21,7 @@ type unpacker struct {
 	reader   io.Reader
 	maxalloc uint64
 	read     uint64
+	buffer   [10]byte
 
 	objects Objects
 }
@@ -47,7 +48,7 @@ func (u *unpacker) Decode(data any) error {
 
 		var oid uint64
 
-		n, err := readVarUint(u.reader, &oid)
+		n, err := readVarUint(u.reader, &oid, u.buffer[:])
 		u.read += uint64(n)
 		if err != nil {
 			return err
@@ -104,22 +105,21 @@ func (u *unpacker) decodeBytes(ln uint64, info packerInfo) ([]byte, int, error) 
 func (u *unpacker) decodeType() (reflect.Type, int, error) {
 	var (
 		total int
-		buf   [1]byte
 	)
 
-	n, err := u.reader.Read(buf[:1])
+	n, err := u.reader.Read(u.buffer[:1])
 	total += n
 	if err != nil {
 		return nil, total, err
 	}
 
-	var kind = reflect.Kind(buf[0])
+	var kind = reflect.Kind(u.buffer[0])
 
 	switch kind {
 	case reflect.Array:
 		var ln uint64
 
-		n, err := readVarUint(u.reader, &ln)
+		n, err := readVarUint(u.reader, &ln, u.buffer[:])
 		total += n
 		if err != nil {
 			return nil, total, err
@@ -346,7 +346,7 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64:
 		var num int64
 
-		n, err := readVarInt(u.reader, &num)
+		n, err := readVarInt(u.reader, &num, u.buffer[:])
 		total += n
 		if err != nil {
 			return total, err
@@ -359,7 +359,7 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 	case reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		var num uint64
 
-		n, err := readVarUint(u.reader, &num)
+		n, err := readVarUint(u.reader, &num, u.buffer[:])
 		total += n
 		if err != nil {
 			return total, err
@@ -462,7 +462,7 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 			ln          int64
 		)
 
-		n, err := readVarInt(u.reader, &ln)
+		n, err := readVarInt(u.reader, &ln, u.buffer[:])
 		total += n
 		if err != nil {
 			return total, err
@@ -513,7 +513,7 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 
 		var ln uint64
 
-		n, err := readVarUint(u.reader, &ln)
+		n, err := readVarUint(u.reader, &ln, u.buffer[:])
 		total += n
 		if err != nil {
 			return total, err
@@ -562,7 +562,7 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 	case reflect.String:
 		var ln uint64
 
-		n, err := readVarUint(u.reader, &ln)
+		n, err := readVarUint(u.reader, &ln, u.buffer[:])
 		total += n
 		if err != nil {
 			return total, err

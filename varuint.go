@@ -2,7 +2,7 @@ package pack
 
 import "io"
 
-func writeVarUint(w io.Writer, i uint64) (int, error) {
+func writeVarUint(w io.Writer, i uint64, buf []byte) (int, error) {
 	var (
 		total int
 	)
@@ -12,34 +12,27 @@ func writeVarUint(w io.Writer, i uint64) (int, error) {
 	// d = number data
 
 	for i > 0x7f {
-		n, err := w.Write([]byte{byte(i&0x7f) | 0x80})
-		if err != nil {
-			return total, err
-		}
-		total += n
+		buf[total] = byte(i&0x7f) | 0x80
+		total++
 
 		i >>= 7
 	}
 
-	n, err := w.Write([]byte{byte(i & 0x7f)})
-	if err != nil {
-		return total, err
-	}
-	total += n
+	buf[total] = byte(i & 0x7f)
+	total++
 
-	return total, nil
+	return w.Write(buf[:total])
 }
 
-func readVarUint(r io.Reader, i *uint64) (int, error) {
+func readVarUint(r io.Reader, i *uint64, buf []byte) (int, error) {
 	var (
 		total  int
 		offset int
 		result uint64
-		buf    = []byte{0}
 	)
 
 	for {
-		n, err := r.Read(buf)
+		n, err := r.Read(buf[:1])
 		if err != nil {
 			return total, err
 		}
