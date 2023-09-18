@@ -13,6 +13,7 @@ func TestPack(t *testing.T) {
 	}
 
 	type customType struct {
+		String  string
 		Value   interface{}
 		Test    map[string]any
 		Pointer *customSubType
@@ -46,7 +47,7 @@ func TestPack(t *testing.T) {
 			complex64(complex(13, 37)), complex128(complex(13, 37)),
 
 			// string
-			"456",
+			"456", "",
 
 			// *string
 			&str,
@@ -108,8 +109,9 @@ func TestPack(t *testing.T) {
 
 			// Custom struct
 			customType{
-				Value: 123,
-				Test:  map[string]any{},
+				String: "",
+				Value:  123,
+				Test:   map[string]any{},
 				Pointer: &customSubType{
 					Value: "Hello",
 				},
@@ -117,6 +119,7 @@ func TestPack(t *testing.T) {
 
 			// Custom struct with nil
 			customType{
+				String:  "",
 				Value:   nil,
 				Test:    nil,
 				Pointer: nil,

@@ -1,3 +1,3 @@
 module github.com/NublyBR/go-pack
 
-go 1.21.0
+go 1.21

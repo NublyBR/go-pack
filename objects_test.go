@@ -45,9 +45,9 @@ func TestObjects(t *testing.T) {
 			objectA{Val: "Hello"},
 			objectB{Param: 123, SubObject: &objectB2{"sub"}},
 			objectC{Val: "World", Param: 456},
-			objectB{Param: 789, SubObject: &objectB2{"obj"}},
-			objectC{Val: "Test", Param: 987},
-			objectA{Val: "Another"},
+			&objectB{Param: 789, SubObject: &objectB2{"obj"}},
+			&objectC{Val: "Test", Param: 987},
+			&objectA{Val: "Another"},
 
 			recursiveObject{
 				Level: 1,
@@ -77,14 +77,21 @@ func TestObjects(t *testing.T) {
 			t.Error(err)
 		}
 
-		if reflect.TypeOf(output) != reflect.PointerTo(reflect.TypeOf(input)) {
+		inputType := reflect.TypeOf(input)
+		expect := input
+		if inputType.Kind() == reflect.Pointer {
+			inputType = inputType.Elem()
+			expect = reflect.ValueOf(input).Elem().Interface()
+		}
+
+		if reflect.TypeOf(output) != reflect.PointerTo(inputType) {
 			t.Errorf("decoded object type should be a pointer to input object type; expected: %s, got: %s",
-				reflect.PointerTo(reflect.TypeOf(input)).String(), reflect.TypeOf(output).String())
+				reflect.PointerTo(inputType).String(), reflect.TypeOf(output).String())
 		} else {
 			output = reflect.ValueOf(output).Elem().Interface()
 
-			if !reflect.DeepEqual(input, output) {
-				t.Errorf("decoded object should equal input object; expected: %+v, got: %+v", input, output)
+			if !reflect.DeepEqual(expect, output) {
+				t.Errorf("decoded object should equal input object; expected: %+v, got: %+v", expect, output)
 			}
 		}
 	}

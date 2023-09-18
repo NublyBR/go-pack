@@ -10,6 +10,7 @@ var (
 	ErrInvalidPackedUint        = errors.New("invalid packed uint")
 	ErrInvalidReceiver          = errors.New("invalid argument given to Decode, not a pointer type")
 	ErrNil                      = errors.New("attempted to encode nil outside of pointer or interface context")
+	ErrNilObject                = errors.New("may not encode nil in object mode")
 	ErrMustBePointerToInterface = errors.New("in Objects mode, value given to Decode must be of type *interface{}")
 )
 

@@ -42,6 +42,14 @@ func (p *packer) Encode(data any) error {
 
 	if p.objects != nil {
 
+		for reflect.TypeOf(data).Kind() == reflect.Pointer {
+			val := reflect.ValueOf(data)
+			if val.IsNil() {
+				return ErrNilObject
+			}
+			data = val.Elem().Interface()
+		}
+
 		oid, exists := p.objects.GetID(data)
 		if !exists {
 			return &ErrNotDefined{typ: reflect.TypeOf(data)}
