@@ -1,7 +1,7 @@
 # 📦 Pack
 
 [![GoDoc](https://godoc.org/github.com/NublyBR/go-pack?status.png)](http://godoc.org/github.com/NublyBR/go-pack)
-[![Go Report Card](https://goreportcard.com/badge/github.com/NublyBR/go-pack)](https://goreportcard.com/report/github.com/NublyBR/go-pack)
+[![Go Report Card](https://goreportcard.com/badge/github.com/NublyBR/go-pack?)](https://goreportcard.com/report/github.com/NublyBR/go-pack)
 
 A Go lib for packing and unpacking Go types into binary data, for easy storage and network streaming.
 
