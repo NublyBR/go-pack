@@ -186,62 +186,11 @@ func (u *unpacker) decodeType() (reflect.Type, int, error) {
 
 		return reflect.PointerTo(innerType), total, nil
 
-	case reflect.Interface:
-		return reflect.TypeOf([]any{}).Elem(), total, nil
-
-	case reflect.Bool:
-		return reflect.TypeOf(false), total, nil
-
-	case reflect.Int:
-		return reflect.TypeOf(int(0)), total, nil
-
-	case reflect.Int8:
-		return reflect.TypeOf(int8(0)), total, nil
-
-	case reflect.Int16:
-		return reflect.TypeOf(int16(0)), total, nil
-
-	case reflect.Int32:
-		return reflect.TypeOf(int32(0)), total, nil
-
-	case reflect.Int64:
-		return reflect.TypeOf(int64(0)), total, nil
-
-	case reflect.Uint:
-		return reflect.TypeOf(uint(0)), total, nil
-
-	case reflect.Uint8:
-		return reflect.TypeOf(uint8(0)), total, nil
-
-	case reflect.Uint16:
-		return reflect.TypeOf(uint16(0)), total, nil
-
-	case reflect.Uint32:
-		return reflect.TypeOf(uint32(0)), total, nil
-
-	case reflect.Uint64:
-		return reflect.TypeOf(uint64(0)), total, nil
-
-	case reflect.Uintptr:
-		return reflect.TypeOf(uintptr(0)), total, nil
-
-	case reflect.Float32:
-		return reflect.TypeOf(float32(0)), total, nil
-
-	case reflect.Float64:
-		return reflect.TypeOf(float64(0)), total, nil
-
-	case reflect.Complex64:
-		return reflect.TypeOf(complex64(complex(0, 0))), total, nil
-
-	case reflect.Complex128:
-		return reflect.TypeOf(complex128(complex(0, 0))), total, nil
-
-	case reflect.String:
-		return reflect.TypeOf(""), total, nil
-
-	case 0xff:
-		return nil, total, nil
+	default:
+		typ, ok := kindToType[kind]
+		if ok {
+			return typ, total, nil
+		}
 
 	}
 

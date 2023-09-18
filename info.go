@@ -25,6 +25,10 @@ type packerInfo struct {
 func parsePackerInfo(tag string) packerInfo {
 	var info packerInfo
 
+	if tag == "" {
+		return info
+	}
+
 	for _, part := range strings.Split(tag, ";") {
 
 		var (
