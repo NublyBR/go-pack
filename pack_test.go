@@ -19,6 +19,8 @@ func TestPack(t *testing.T) {
 		Pointer *customSubType
 	}
 
+	type renamedInt int
+
 	var (
 		buf = bytes.NewBuffer(nil)
 
@@ -45,6 +47,9 @@ func TestPack(t *testing.T) {
 
 			// complex64, complex128
 			complex64(complex(13, 37)), complex128(complex(13, 37)),
+
+			// renamed int type
+			renamedInt(1337), renamedInt(-1337_1337),
 
 			// string
 			"456", "",

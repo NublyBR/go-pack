@@ -221,71 +221,37 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 	}
 
 	switch typ.Kind() {
-	case reflect.Int8, reflect.Uint8, reflect.Bool:
-		var (
-			n   int
-			err error
-		)
-
-		switch cast := val.Interface().(type) {
-		case uint8:
-			p.buffer[0] = byte(cast)
-			n, err = p.writer.Write(p.buffer[:1])
-		case int8:
-			p.buffer[0] = byte(cast)
-			n, err = p.writer.Write(p.buffer[:1])
-		case bool:
-			if cast {
-				p.buffer[0] = 1
-				n, err = p.writer.Write(p.buffer[:1])
-				total += n
-				return total, err
-			}
-
+	case reflect.Bool:
+		if val.Bool() {
+			p.buffer[0] = 1
+		} else {
 			p.buffer[0] = 0
-			n, err = p.writer.Write(p.buffer[:1])
-			total += n
-			return total, err
 		}
+		n, err := p.writer.Write(p.buffer[:1])
+		total += n
+		return total, err
 
+	case reflect.Int8:
+		p.buffer[0] = byte(val.Int())
+		n, err := p.writer.Write(p.buffer[:1])
+		total += n
+		return total, err
+
+	case reflect.Uint8:
+		p.buffer[0] = byte(val.Uint())
+		n, err := p.writer.Write(p.buffer[:1])
 		total += n
 		return total, err
 
 	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64:
-		var value int64
 
-		switch cast := val.Interface().(type) {
-		case int:
-			value = int64(cast)
-		case int16:
-			value = int64(cast)
-		case int32:
-			value = int64(cast)
-		case int64:
-			value = int64(cast)
-		}
-
-		n, err := writeVarInt(p.writer, value, p.buffer[:])
+		n, err := writeVarInt(p.writer, val.Int(), p.buffer[:])
 		total += n
 		return total, err
 
 	case reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		var value uint64
 
-		switch cast := val.Interface().(type) {
-		case uint:
-			value = uint64(cast)
-		case uint16:
-			value = uint64(cast)
-		case uint32:
-			value = uint64(cast)
-		case uint64:
-			value = uint64(cast)
-		case uintptr:
-			value = uint64(cast)
-		}
-
-		n, err := writeVarUint(p.writer, value, p.buffer[:])
+		n, err := writeVarUint(p.writer, val.Uint(), p.buffer[:])
 		total += n
 		return total, err
 
