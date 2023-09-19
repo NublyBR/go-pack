@@ -20,26 +20,45 @@ type Packer interface {
 }
 
 type packer struct {
+	realWriter io.Writer
+
 	writer  io.Writer
 	written uint64
 	buffer  dataBuffer
 
-	objects Objects
+	objects   Objects
+	sizelimit uint64
+	stopat    uint64
 }
 
 func NewPacker(writer io.Writer, options ...Options) Packer {
-	p := &packer{writer: writer}
+	p := &packer{realWriter: writer}
 
 	for _, opt := range options {
 		if opt.WithObjects != nil {
 			p.objects = opt.WithObjects
 		}
+		if opt.SizeLimit > 0 {
+			p.sizelimit = opt.SizeLimit
+		}
+	}
+
+	if p.sizelimit <= 0 {
+		p.writer = p.realWriter
 	}
 
 	return p
 }
 
 func (p *packer) Encode(data any) error {
+	if p.sizelimit > 0 {
+		p.stopat = p.written + p.sizelimit
+		p.writer = &limitedWriter{
+			O: p.sizelimit,
+			N: p.sizelimit,
+			W: p.realWriter,
+		}
+	}
 
 	if p.objects != nil {
 
@@ -61,9 +80,6 @@ func (p *packer) Encode(data any) error {
 		if err != nil {
 			return err
 		}
-
-		return p.encode(data, packerInfo{})
-
 	}
 
 	return p.encode(data, packerInfo{})
@@ -74,11 +90,17 @@ func (p *packer) BytesWritten() uint64 {
 }
 
 func (p *packer) encodeBytes(data []byte, inf packerInfo) error {
-	if inf.maxSize > 0 && uint64(len(data)) > inf.maxSize {
+	var ln = uint64(len(data))
+
+	if inf.maxSize > 0 && ln > inf.maxSize {
 		return &ErrDataTooLarge{typ: reflect.TypeOf(data), max: inf.maxSize, size: uint64(len(data))}
 	}
 
-	n, err := writeVarUint(p.writer, uint64(len(data)), p.buffer[:])
+	if p.stopat > 0 && p.written+ln > p.stopat {
+		return &ErrDataTooLarge{max: p.sizelimit, size: p.written + ln}
+	}
+
+	n, err := writeVarUint(p.writer, ln, p.buffer[:])
 	p.written += uint64(n)
 	if err != nil {
 		return err
@@ -296,6 +318,10 @@ func (p *packer) encode(data any, info packerInfo) error {
 			return &ErrDataTooLarge{typ: reflect.TypeOf(data), max: info.maxSize, size: uint64(ln)}
 		}
 
+		if p.stopat > 0 && p.written+uint64(ln) > p.stopat {
+			return &ErrDataTooLarge{max: p.sizelimit, size: p.written + uint64(ln)}
+		}
+
 		// If map is nil, set length to -1 so the decoder knows not to instance it
 		if val.IsNil() {
 			ln = -1
@@ -333,6 +359,7 @@ func (p *packer) encode(data any, info packerInfo) error {
 		return nil
 
 	case reflect.Slice:
+
 		switch typ.Elem().Kind() {
 		case reflect.Uint8:
 			err = p.encodeBytes(val.Bytes(), info)
@@ -349,6 +376,10 @@ func (p *packer) encode(data any, info packerInfo) error {
 
 		if info.maxSize > 0 && uint64(ln) > info.maxSize {
 			return &ErrDataTooLarge{typ: typ, max: info.maxSize, size: uint64(ln)}
+		}
+
+		if p.stopat > 0 && p.written+uint64(ln) > p.stopat {
+			return &ErrDataTooLarge{max: p.sizelimit, size: p.written + uint64(ln)}
 		}
 
 		n, err = writeVarUint(p.writer, uint64(ln), p.buffer[:])

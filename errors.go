@@ -14,14 +14,6 @@ var (
 	ErrMustBePointerToInterface = errors.New("in Objects mode, value given to Decode must be of type *interface{}")
 )
 
-type ErrMaxAlloc struct {
-	request, allowed uint64
-}
-
-func (e *ErrMaxAlloc) Error() string {
-	return fmt.Sprintf("value requested an allocation higher than maximum permitted; requested: %d, max allowed: %d", e.request, e.allowed)
-}
-
 type ErrNotDefined struct {
 	typ reflect.Type
 	oid uint
@@ -50,6 +42,9 @@ type ErrDataTooLarge struct {
 }
 
 func (e *ErrDataTooLarge) Error() string {
+	if e.typ == nil {
+		return fmt.Sprintf("data exceeds maximum allowed size; max: %d, got: %d", e.max, e.size)
+	}
 	return fmt.Sprintf("value of type %q exceeds maximum allowed size; max: %d, got: %d", e.typ.String(), e.max, e.size)
 }
 

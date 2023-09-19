@@ -200,6 +200,125 @@ func TestIgnore(t *testing.T) {
 	}
 }
 
+func TestPackerLimit(t *testing.T) {
+
+	type test struct {
+		input  any
+		expect *ErrDataTooLarge
+	}
+
+	var (
+		options = Options{
+			SizeLimit: 100,
+		}
+		buffer = bytes.NewBuffer(nil)
+
+		tests = []test{
+			{
+				input:  make([]byte, 100),
+				expect: &ErrDataTooLarge{max: 100, size: 101},
+			},
+			{
+				input:  string(make([]byte, 100)),
+				expect: &ErrDataTooLarge{max: 100, size: 101},
+			},
+			{
+				input:  make([]int, 100),
+				expect: &ErrDataTooLarge{max: 100, size: 101},
+			},
+			{
+				input: func() any {
+					mp := make(map[int]bool)
+					for i := 0; i < 100; i++ {
+						mp[i] = true
+					}
+					return mp
+				}(),
+				expect: &ErrDataTooLarge{max: 100, size: 101},
+			},
+			{
+				input:  [101]int{},
+				expect: &ErrDataTooLarge{max: 100, size: 101},
+			},
+		}
+	)
+
+	for _, test := range tests {
+		p := NewPacker(buffer, options)
+
+		err := p.Encode(test.input)
+
+		if err == nil {
+			t.Errorf("expected p.Encode(%s) to error, got nil", reflect.TypeOf(test.input).String())
+			continue
+		}
+
+		if !reflect.DeepEqual(test.expect, err) {
+			t.Errorf("expected p.Encode(%s) to equal %q, got %q", reflect.TypeOf(test.input).String(), test.expect, err)
+		}
+	}
+}
+
+func TestUnpackerLimit(t *testing.T) {
+
+	type test struct {
+		input    []byte
+		receiver reflect.Value
+		expect   *ErrDataTooLarge
+	}
+
+	var (
+		options = Options{
+			SizeLimit: 100,
+		}
+
+		tests = []test{
+			{
+				input:    []byte{100}, // varUint(100)
+				receiver: reflect.New(reflect.SliceOf(reflect.TypeOf(byte(0)))),
+				expect:   &ErrDataTooLarge{max: 100, size: 101},
+			},
+			{
+				input:    []byte{100}, // varUint(100)
+				receiver: reflect.New(reflect.TypeOf("")),
+				expect:   &ErrDataTooLarge{max: 100, size: 101},
+			},
+			{
+				input:    []byte{100}, // varUint(100)
+				receiver: reflect.New(reflect.SliceOf(reflect.TypeOf(0))),
+				expect:   &ErrDataTooLarge{max: 100, size: 101},
+			},
+			{
+				input:    []byte{},
+				receiver: reflect.New(reflect.ArrayOf(101, reflect.TypeOf(0))),
+				expect:   &ErrDataTooLarge{max: 100, size: 101},
+			},
+			{
+				input:    []byte{164, 1}, // varInt(100)
+				receiver: reflect.New(reflect.MapOf(reflect.TypeOf(0), reflect.TypeOf(false))),
+				expect:   &ErrDataTooLarge{max: 100, size: 102},
+			},
+		}
+	)
+
+	for _, test := range tests {
+		buffer := bytes.NewBuffer(test.input)
+
+		p := NewUnpacker(buffer, options)
+
+		err := p.Decode(test.receiver.Interface())
+
+		if err == nil {
+			t.Errorf("expected u.Decode(%s) to error, got nil", test.receiver.String())
+			continue
+		}
+
+		if !reflect.DeepEqual(test.expect, err) {
+			t.Errorf("expected u.Decode(%s) to equal %q, got %q", test.receiver.String(), test.expect, err)
+		}
+	}
+}
+
 func BenchmarkPacker(b *testing.B) {
 	type object struct {
 		String string

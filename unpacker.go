@@ -19,27 +19,46 @@ type Unpacker interface {
 }
 
 type unpacker struct {
-	reader   io.Reader
-	maxalloc uint64
-	read     uint64
-	buffer   dataBuffer
+	realReader io.Reader
 
-	objects Objects
+	reader io.Reader
+	read   uint64
+	buffer dataBuffer
+
+	objects   Objects
+	sizelimit uint64
+	stopat    uint64
 }
 
 func NewUnpacker(reader io.Reader, options ...Options) Unpacker {
-	u := &unpacker{reader: reader, maxalloc: 0xffff_ffff}
+	u := &unpacker{realReader: reader}
 
 	for _, opt := range options {
 		if opt.WithObjects != nil {
 			u.objects = opt.WithObjects
 		}
+		if opt.SizeLimit > 0 {
+			u.sizelimit = opt.SizeLimit
+		}
+	}
+
+	if u.sizelimit <= 0 {
+		u.reader = u.realReader
 	}
 
 	return u
 }
 
 func (u *unpacker) Decode(data any) error {
+
+	if u.sizelimit > 0 {
+		u.stopat = u.read + u.sizelimit
+		u.reader = &limitedReader{
+			O: u.sizelimit,
+			N: u.sizelimit,
+			R: u.realReader,
+		}
+	}
 
 	if u.objects != nil {
 
@@ -85,8 +104,8 @@ func (u *unpacker) decodeBytes(ln uint64, info packerInfo) ([]byte, error) {
 		return nil, &ErrDataTooLarge{typ: reflect.TypeOf([]byte{}), max: info.maxSize, size: ln}
 	}
 
-	if ln > u.maxalloc {
-		return nil, &ErrMaxAlloc{request: ln, allowed: u.maxalloc}
+	if u.stopat > 0 && u.read+ln > u.stopat {
+		return nil, &ErrDataTooLarge{max: u.sizelimit, size: u.read + ln - (u.stopat - u.sizelimit)}
 	}
 
 	if ln == 0 {
@@ -121,6 +140,10 @@ func (u *unpacker) decodeType() (reflect.Type, error) {
 		u.read += uint64(n)
 		if err != nil {
 			return nil, err
+		}
+
+		if u.stopat > 0 && u.read+ln > u.stopat {
+			return nil, &ErrDataTooLarge{max: u.sizelimit, size: u.read + ln - (u.stopat - u.sizelimit)}
 		}
 
 		innerType, err := u.decodeType()
@@ -369,6 +392,14 @@ func (u *unpacker) decode(data any, info packerInfo) error {
 			ln          = typ.Len()
 		)
 
+		if info.maxSize > 0 && uint64(ln) > info.maxSize {
+			return &ErrDataTooLarge{typ: reflect.TypeOf(data), max: info.maxSize, size: uint64(ln)}
+		}
+
+		if u.stopat > 0 && u.read+uint64(ln) > u.stopat {
+			return &ErrDataTooLarge{max: u.sizelimit, size: u.read + uint64(ln) - (u.stopat - u.sizelimit)}
+		}
+
 		if isInterface {
 			for i := 0; i < ln; i++ {
 				elem, err := u.decodeMarked(packerInfo{})
@@ -404,6 +435,14 @@ func (u *unpacker) decode(data any, info packerInfo) error {
 		if ln < 0 {
 			val.SetZero()
 			return nil
+		}
+
+		if info.maxSize > 0 && uint64(ln) > info.maxSize {
+			return &ErrDataTooLarge{typ: reflect.TypeOf(data), max: info.maxSize, size: uint64(ln)}
+		}
+
+		if u.stopat > 0 && u.read+uint64(ln) > u.stopat {
+			return &ErrDataTooLarge{max: u.sizelimit, size: u.read + uint64(ln) - (u.stopat - u.sizelimit)}
 		}
 
 		val.Set(reflect.MakeMap(typ))
@@ -460,6 +499,14 @@ func (u *unpacker) decode(data any, info packerInfo) error {
 			val.SetBytes(data)
 
 			return nil
+		}
+
+		if info.maxSize > 0 && uint64(ln) > info.maxSize {
+			return &ErrDataTooLarge{typ: reflect.TypeOf(data), max: info.maxSize, size: uint64(ln)}
+		}
+
+		if u.stopat > 0 && u.read+ln > u.stopat {
+			return &ErrDataTooLarge{max: u.sizelimit, size: u.read + ln - (u.stopat - u.sizelimit)}
 		}
 
 		var isInterface = typ.Elem().Kind() == reflect.Interface
