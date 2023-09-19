@@ -16,6 +16,9 @@ type Unpacker interface {
 
 	// Total bytes read from the underlying stream
 	BytesRead() uint64
+
+	// Reset bytes read to 0
+	ResetCounter()
 }
 
 type unpacker struct {
@@ -97,6 +100,10 @@ func (u *unpacker) Decode(data any) error {
 
 func (u *unpacker) BytesRead() uint64 {
 	return u.read
+}
+
+func (u *unpacker) ResetCounter() {
+	u.read = 0
 }
 
 func (u *unpacker) decodeBytes(ln uint64, info packerInfo) ([]byte, error) {

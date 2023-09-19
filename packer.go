@@ -17,6 +17,9 @@ type Packer interface {
 
 	// Total bytes written to the underlying stream
 	BytesWritten() uint64
+
+	// Reset bytes written to 0
+	ResetCounter()
 }
 
 type packer struct {
@@ -87,6 +90,10 @@ func (p *packer) Encode(data any) error {
 
 func (p *packer) BytesWritten() uint64 {
 	return p.written
+}
+
+func (p *packer) ResetCounter() {
+	p.written = 0
 }
 
 func (p *packer) encodeBytes(data []byte, inf packerInfo) error {

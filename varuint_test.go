@@ -6,6 +6,9 @@ import (
 )
 
 func TestVarUint(t *testing.T) {
+
+	t.Parallel()
+
 	var (
 		b dataBuffer
 

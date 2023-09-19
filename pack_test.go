@@ -8,6 +8,9 @@ import (
 )
 
 func TestPack(t *testing.T) {
+
+	t.Parallel()
+
 	type customSubType struct {
 		Value string
 	}
@@ -173,6 +176,9 @@ func TestPack(t *testing.T) {
 }
 
 func TestIgnore(t *testing.T) {
+
+	t.Parallel()
+
 	type structIgnore struct {
 		Value string `pack:"ignore"`
 	}
@@ -202,6 +208,8 @@ func TestIgnore(t *testing.T) {
 
 func TestPackerLimit(t *testing.T) {
 
+	t.Parallel()
+
 	type test struct {
 		input  any
 		expect *ErrDataTooLarge
@@ -228,8 +236,8 @@ func TestPackerLimit(t *testing.T) {
 			},
 			{
 				input: func() any {
-					mp := make(map[int]bool)
-					for i := 0; i < 100; i++ {
+					mp := make(map[byte]bool)
+					for i := byte(0); i < 100; i++ {
 						mp[i] = true
 					}
 					return mp
@@ -260,6 +268,8 @@ func TestPackerLimit(t *testing.T) {
 }
 
 func TestUnpackerLimit(t *testing.T) {
+
+	t.Parallel()
 
 	type test struct {
 		input    []byte
@@ -295,7 +305,7 @@ func TestUnpackerLimit(t *testing.T) {
 			},
 			{
 				input:    []byte{164, 1}, // varInt(100)
-				receiver: reflect.New(reflect.MapOf(reflect.TypeOf(0), reflect.TypeOf(false))),
+				receiver: reflect.New(reflect.MapOf(reflect.TypeOf(byte(0)), reflect.TypeOf(false))),
 				expect:   &ErrDataTooLarge{max: 100, size: 102},
 			},
 		}
