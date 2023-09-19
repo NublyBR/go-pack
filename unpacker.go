@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"reflect"
+	"unsafe"
 )
 
 var typePointerToInterface = reflect.PointerTo(reflect.TypeOf([]any{}).Elem())
@@ -90,6 +91,10 @@ func (u *unpacker) decodeBytes(ln uint64, info packerInfo) ([]byte, int, error) 
 
 	if ln > u.maxalloc {
 		return nil, 0, &ErrMaxAlloc{request: ln, allowed: u.maxalloc}
+	}
+
+	if ln == 0 {
+		return nil, 0, nil
 	}
 
 	var buf = make([]byte, int(ln))
@@ -521,7 +526,8 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 			return total, err
 		}
 
-		val.SetString(string(buf))
+		val.SetString(*(*string)(unsafe.Pointer(&buf)))
+
 		return total, nil
 
 	case reflect.Struct:

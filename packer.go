@@ -118,7 +118,8 @@ func (p *packer) encodeType(typ reflect.Type) (int, error) {
 		return total, &ErrCantUseInInterfaceMode{kind: kind, typ: typ}
 	}
 
-	n, err := p.writer.Write([]byte{byte(kind)})
+	p.buffer[0] = byte(kind)
+	n, err := p.writer.Write(p.buffer[:1])
 	total += n
 	if err != nil {
 		return total, err
@@ -199,7 +200,8 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 
 	for typ.Kind() == reflect.Pointer {
 		if val.IsNil() {
-			n, err := p.writer.Write([]byte{0})
+			p.buffer[0] = 0
+			n, err := p.writer.Write(p.buffer[:1])
 			total += n
 			if err != nil {
 				return total, err
@@ -207,7 +209,8 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 			return total, nil
 		}
 
-		n, err := p.writer.Write([]byte{1})
+		p.buffer[0] = 1
+		n, err := p.writer.Write(p.buffer[:1])
 		total += n
 		if err != nil {
 			return total, err
@@ -226,17 +229,21 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 
 		switch cast := val.Interface().(type) {
 		case uint8:
-			n, err = p.writer.Write([]byte{byte(cast)})
+			p.buffer[0] = byte(cast)
+			n, err = p.writer.Write(p.buffer[:1])
 		case int8:
-			n, err = p.writer.Write([]byte{byte(cast)})
+			p.buffer[0] = byte(cast)
+			n, err = p.writer.Write(p.buffer[:1])
 		case bool:
 			if cast {
-				n, err = p.writer.Write([]byte{1})
+				p.buffer[0] = 1
+				n, err = p.writer.Write(p.buffer[:1])
 				total += n
 				return total, err
 			}
 
-			n, err = p.writer.Write([]byte{0})
+			p.buffer[0] = 0
+			n, err = p.writer.Write(p.buffer[:1])
 			total += n
 			return total, err
 		}
