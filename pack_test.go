@@ -52,7 +52,7 @@ func TestPack(t *testing.T) {
 			renamedInt(1337), renamedInt(-1337_1337),
 
 			// string
-			"456", "",
+			"456", "", "тестирование юникода на всякий случай",
 
 			// *string
 			&str,
@@ -134,8 +134,10 @@ func TestPack(t *testing.T) {
 
 	for _, input := range inputs {
 		buf.Reset()
+		packer.written = 0
+		unpacker.read = 0
 
-		written, err := packer.encode(input, packerInfo{})
+		err := packer.encode(input, packerInfo{})
 		if err != nil {
 			t.Error(err)
 		}
@@ -147,7 +149,7 @@ func TestPack(t *testing.T) {
 
 		receiver := reflect.New(reflect.TypeOf(input))
 
-		read, err := unpacker.decode(receiver.Interface(), packerInfo{})
+		err = unpacker.decode(receiver.Interface(), packerInfo{})
 		if err != nil {
 			t.Error(err)
 		}
@@ -160,9 +162,9 @@ func TestPack(t *testing.T) {
 			t.Errorf("expected all bytes to be consumed after decode, got %d extra bytes: %q", buf.Len(), buf.Bytes())
 		}
 
-		if written != read {
+		if packer.written != unpacker.read {
 			t.Errorf("expected bytes written to equal bytes read, written: %d / read: %d / actual: %d - %s",
-				written, read, len(content), reflect.TypeOf(input).String())
+				packer.written, unpacker.read, len(content), reflect.TypeOf(input).String())
 		}
 
 		// fmt.Printf("AFTER DECODED: %+v %x %q\n", input, buf.Bytes(), buf.Bytes())

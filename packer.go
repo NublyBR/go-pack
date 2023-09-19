@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"reflect"
+	"unsafe"
 )
 
 type Packer interface {
@@ -61,52 +62,37 @@ func (p *packer) Encode(data any) error {
 			return err
 		}
 
-		read, err := p.encode(data, packerInfo{})
-		p.written += uint64(read)
-
-		return err
+		return p.encode(data, packerInfo{})
 
 	}
 
-	n, err := p.encode(data, packerInfo{})
-	p.written += uint64(n)
-
-	return err
+	return p.encode(data, packerInfo{})
 }
 
 func (p *packer) BytesWritten() uint64 {
 	return p.written
 }
 
-func (p *packer) encodeBytes(data []byte, inf packerInfo) (int, error) {
-	var total int
-
+func (p *packer) encodeBytes(data []byte, inf packerInfo) error {
 	if inf.maxSize > 0 && uint64(len(data)) > inf.maxSize {
-		return total, &ErrDataTooLarge{typ: reflect.TypeOf(data), max: inf.maxSize, size: uint64(len(data))}
+		return &ErrDataTooLarge{typ: reflect.TypeOf(data), max: inf.maxSize, size: uint64(len(data))}
 	}
 
 	n, err := writeVarUint(p.writer, uint64(len(data)), p.buffer[:])
-	total += n
+	p.written += uint64(n)
 	if err != nil {
-		return total, err
+		return err
 	}
 
 	n, err = p.writer.Write(data)
-	total += n
-	if err != nil {
-		return total, err
-	}
+	p.written += uint64(n)
 
-	return total, nil
+	return err
 }
 
-func (p *packer) encodeType(typ reflect.Type) (int, error) {
+func (p *packer) encodeType(typ reflect.Type) error {
 
-	var (
-		total int
-
-		kind reflect.Kind
-	)
+	var kind reflect.Kind
 
 	if typ == nil {
 		kind = 0xff
@@ -115,105 +101,100 @@ func (p *packer) encodeType(typ reflect.Type) (int, error) {
 	}
 
 	if !canEncodeInInterface[kind] {
-		return total, &ErrCantUseInInterfaceMode{kind: kind, typ: typ}
+		return &ErrCantUseInInterfaceMode{kind: kind, typ: typ}
 	}
 
 	p.buffer[0] = byte(kind)
 	n, err := p.writer.Write(p.buffer[:1])
-	total += n
+	p.written += uint64(n)
 	if err != nil {
-		return total, err
+		return err
 	}
 
 	switch kind {
 	case reflect.Pointer:
-		n, err = p.encodeType(typ.Elem())
-		total += n
+		err = p.encodeType(typ.Elem())
 		if err != nil {
-			return total, err
+			return err
 		}
 
 	case reflect.Array:
 		n, err := writeVarUint(p.writer, uint64(typ.Len()), p.buffer[:])
-		total += n
+		p.written += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
-		n, err = p.encodeType(typ.Elem())
-		total += n
+		err = p.encodeType(typ.Elem())
 		if err != nil {
-			return total, err
+			return err
 		}
 
 	case reflect.Map:
-		n, err = p.encodeType(typ.Key())
-		total += n
+		err = p.encodeType(typ.Key())
 		if err != nil {
-			return total, err
+			return err
 		}
 
-		n, err = p.encodeType(typ.Elem())
-		total += n
+		err = p.encodeType(typ.Elem())
 		if err != nil {
-			return total, err
+			return err
 		}
 
 	case reflect.Slice:
-		n, err = p.encodeType(typ.Elem())
-		total += n
+		err = p.encodeType(typ.Elem())
 		if err != nil {
-			return total, err
+			return err
 		}
 	}
 
-	return total, nil
+	return nil
 }
 
-func (p *packer) encode(data any, info packerInfo) (int, error) {
+func (p *packer) encode(data any, info packerInfo) error {
 	if info.ignore {
-		return 0, nil
+		return nil
 	}
 
 	var (
+		n   int
+		err error
+
 		typ = reflect.TypeOf(data)
 		val = reflect.ValueOf(data)
-
-		total int
 	)
 
 	if info.markType {
-		n, err := p.encodeType(typ)
-		total += n
+		err = p.encodeType(typ)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		if typ == nil {
-			return total, err
+			return nil
 		}
 	}
 
 	if typ == nil {
-		return total, ErrNil
+		return ErrNil
 	}
 
 	for typ.Kind() == reflect.Pointer {
 		if val.IsNil() {
 			p.buffer[0] = 0
-			n, err := p.writer.Write(p.buffer[:1])
-			total += n
+			n, err = p.writer.Write(p.buffer[:1])
+			p.written += uint64(n)
 			if err != nil {
-				return total, err
+				return err
 			}
-			return total, nil
+			return nil
 		}
 
 		p.buffer[0] = 1
-		n, err := p.writer.Write(p.buffer[:1])
-		total += n
+		n, err = p.writer.Write(p.buffer[:1])
+		p.written += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		typ = typ.Elem()
@@ -227,74 +208,68 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 		} else {
 			p.buffer[0] = 0
 		}
-		n, err := p.writer.Write(p.buffer[:1])
-		total += n
-		return total, err
+		n, err = p.writer.Write(p.buffer[:1])
+		p.written += uint64(n)
+		return err
 
 	case reflect.Int8:
 		p.buffer[0] = byte(val.Int())
-		n, err := p.writer.Write(p.buffer[:1])
-		total += n
-		return total, err
+		n, err = p.writer.Write(p.buffer[:1])
+		p.written += uint64(n)
+		return err
 
 	case reflect.Uint8:
 		p.buffer[0] = byte(val.Uint())
-		n, err := p.writer.Write(p.buffer[:1])
-		total += n
-		return total, err
+		n, err = p.writer.Write(p.buffer[:1])
+		p.written += uint64(n)
+		return err
 
 	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64:
-
-		n, err := writeVarInt(p.writer, val.Int(), p.buffer[:])
-		total += n
-		return total, err
+		n, err = writeVarInt(p.writer, val.Int(), p.buffer[:])
+		p.written += uint64(n)
+		return err
 
 	case reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-
-		n, err := writeVarUint(p.writer, val.Uint(), p.buffer[:])
-		total += n
-		return total, err
+		n, err = writeVarUint(p.writer, val.Uint(), p.buffer[:])
+		p.written += uint64(n)
+		return err
 
 	case reflect.Float32:
 		binary.BigEndian.PutUint32(p.buffer[0:4], math.Float32bits(val.Interface().(float32)))
 
-		n, err := p.writer.Write(p.buffer[0:4])
-		total += n
-		return total, err
+		n, err = p.writer.Write(p.buffer[0:4])
+		p.written += uint64(n)
+		return err
 
 	case reflect.Float64:
 		binary.BigEndian.PutUint64(p.buffer[0:8], math.Float64bits(val.Interface().(float64)))
 
-		n, err := p.writer.Write(p.buffer[0:8])
-		total += n
-		return total, err
+		n, err = p.writer.Write(p.buffer[0:8])
+		p.written += uint64(n)
+		return err
 
 	case reflect.Complex64:
 		complex := val.Interface().(complex64)
 		binary.BigEndian.PutUint32(p.buffer[0:4], math.Float32bits(real(complex)))
 		binary.BigEndian.PutUint32(p.buffer[4:8], math.Float32bits(imag(complex)))
 
-		n, err := p.writer.Write(p.buffer[:8])
-		total += n
-		return total, err
+		n, err = p.writer.Write(p.buffer[:8])
+		p.written += uint64(n)
+		return err
 
 	case reflect.Complex128:
 		complex := val.Interface().(complex128)
 		binary.BigEndian.PutUint64(p.buffer[0:8], math.Float64bits(real(complex)))
-		n, err := p.writer.Write(p.buffer[:8])
-		total += n
+		n, err = p.writer.Write(p.buffer[:8])
+		p.written += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		binary.BigEndian.PutUint64(p.buffer[0:8], math.Float64bits(imag(complex)))
 		n, err = p.writer.Write(p.buffer[:8])
-		total += n
-		if err != nil {
-			return total, err
-		}
-
-		return total, err
+		p.written += uint64(n)
+		return err
 
 	case reflect.Array:
 		var (
@@ -303,14 +278,13 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 		)
 
 		for i := 0; i < ln; i++ {
-			n, err := p.encode(val.Index(i).Interface(), packerInfo{markType: isInterface})
-			total += n
+			err = p.encode(val.Index(i).Interface(), packerInfo{markType: isInterface})
 			if err != nil {
-				return total, err
+				return err
 			}
 		}
 
-		return total, nil
+		return nil
 
 	case reflect.Map:
 		var (
@@ -319,7 +293,7 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 		)
 
 		if info.maxSize > 0 && uint64(ln) > info.maxSize {
-			return total, &ErrDataTooLarge{typ: reflect.TypeOf(data), max: info.maxSize, size: uint64(ln)}
+			return &ErrDataTooLarge{typ: reflect.TypeOf(data), max: info.maxSize, size: uint64(ln)}
 		}
 
 		// If map is nil, set length to -1 so the decoder knows not to instance it
@@ -327,14 +301,14 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 			ln = -1
 		}
 
-		n, err := writeVarInt(p.writer, int64(ln), p.buffer[:])
-		total += n
+		n, err = writeVarInt(p.writer, int64(ln), p.buffer[:])
+		p.written += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		if ln <= 0 {
-			return total, nil
+			return nil
 		}
 
 		iter := val.MapRange()
@@ -345,30 +319,27 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 				curVal = iter.Value()
 			)
 
-			n, err := p.encode(curKey.Interface(), packerInfo{})
-			total += n
+			err = p.encode(curKey.Interface(), packerInfo{})
 			if err != nil {
-				return total, err
+				return err
 			}
 
-			n, err = p.encode(curVal.Interface(), packerInfo{markType: isInterface})
-			total += n
+			err = p.encode(curVal.Interface(), packerInfo{markType: isInterface})
 			if err != nil {
-				return total, err
+				return err
 			}
 		}
 
-		return total, nil
+		return nil
 
 	case reflect.Slice:
 		switch typ.Elem().Kind() {
 		case reflect.Uint8:
-			n, err := p.encodeBytes(val.Bytes(), info)
-			total += n
+			err = p.encodeBytes(val.Bytes(), info)
 			if err != nil {
-				return total, err
+				return err
 			}
-			return total, nil
+			return nil
 		}
 
 		var (
@@ -377,46 +348,42 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 		)
 
 		if info.maxSize > 0 && uint64(ln) > info.maxSize {
-			return total, &ErrDataTooLarge{typ: typ, max: info.maxSize, size: uint64(ln)}
+			return &ErrDataTooLarge{typ: typ, max: info.maxSize, size: uint64(ln)}
 		}
 
-		n, err := writeVarUint(p.writer, uint64(ln), p.buffer[:])
-		total += n
+		n, err = writeVarUint(p.writer, uint64(ln), p.buffer[:])
+		p.written += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		for i := 0; i < ln; i++ {
-			n, err := p.encode(val.Index(i).Interface(), packerInfo{markType: isInterface})
-			total += n
+			err := p.encode(val.Index(i).Interface(), packerInfo{markType: isInterface})
 			if err != nil {
-				return total, err
+				return err
 			}
 		}
 
-		return total, err
+		return err
 
 	case reflect.String:
-		var encoded = []byte(val.Interface().(string))
+		var (
+			str     = val.Interface().(string)
+			encoded = *(*[]byte)(unsafe.Pointer(&str))
+		)
 
-		n, err := p.encodeBytes(encoded, info)
-		total += n
-		if err != nil {
-			return total, err
-		}
-		return total, nil
+		return p.encodeBytes(encoded, info)
 
 	case reflect.Struct:
-
 		if val.CanAddr() && reflect.PointerTo(typ).Implements(interfaceBeforePack) {
 			err := val.Addr().Interface().(BeforePack).BeforePack()
 			if err != nil {
-				return total, err
+				return err
 			}
 		} else if typ.Implements(interfaceBeforePack) {
 			err := val.Interface().(BeforePack).BeforePack()
 			if err != nil {
-				return total, err
+				return err
 			}
 		}
 
@@ -439,15 +406,14 @@ func (p *packer) encode(data any, info packerInfo) (int, error) {
 
 			curInfo.markType = isInterface
 
-			n, err := p.encode(curVal.Interface(), curInfo)
-			total += n
+			err := p.encode(curVal.Interface(), curInfo)
 			if err != nil {
-				return total, err
+				return err
 			}
 		}
 
-		return total, nil
+		return nil
 	}
 
-	return total, &ErrInvalidType{typ}
+	return &ErrInvalidType{typ}
 }

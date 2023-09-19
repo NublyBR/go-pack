@@ -62,8 +62,7 @@ func (u *unpacker) Decode(data any) error {
 
 		item := reflect.New(typ)
 
-		read, err := u.decode(item.Interface(), packerInfo{})
-		u.read += uint64(read)
+		err = u.decode(item.Interface(), packerInfo{})
 		if err != nil {
 			return err
 		}
@@ -74,48 +73,42 @@ func (u *unpacker) Decode(data any) error {
 
 	}
 
-	read, err := u.decode(data, packerInfo{})
-	u.read += uint64(read)
-
-	return err
+	return u.decode(data, packerInfo{})
 }
 
 func (u *unpacker) BytesRead() uint64 {
 	return u.read
 }
 
-func (u *unpacker) decodeBytes(ln uint64, info packerInfo) ([]byte, int, error) {
+func (u *unpacker) decodeBytes(ln uint64, info packerInfo) ([]byte, error) {
 	if info.maxSize > 0 && ln > uint64(info.maxSize) {
-		return nil, 0, &ErrDataTooLarge{typ: reflect.TypeOf([]byte{}), max: info.maxSize, size: ln}
+		return nil, &ErrDataTooLarge{typ: reflect.TypeOf([]byte{}), max: info.maxSize, size: ln}
 	}
 
 	if ln > u.maxalloc {
-		return nil, 0, &ErrMaxAlloc{request: ln, allowed: u.maxalloc}
+		return nil, &ErrMaxAlloc{request: ln, allowed: u.maxalloc}
 	}
 
 	if ln == 0 {
-		return nil, 0, nil
+		return nil, nil
 	}
 
 	var buf = make([]byte, int(ln))
 
 	n, err := io.ReadFull(u.reader, buf)
+	u.read += uint64(n)
 	if err != nil {
-		return nil, n, err
+		return nil, err
 	}
 
-	return buf, n, err
+	return buf, err
 }
 
-func (u *unpacker) decodeType() (reflect.Type, int, error) {
-	var (
-		total int
-	)
-
+func (u *unpacker) decodeType() (reflect.Type, error) {
 	n, err := u.reader.Read(u.buffer[:1])
-	total += n
+	u.read += uint64(n)
 	if err != nil {
-		return nil, total, err
+		return nil, err
 	}
 
 	var kind = reflect.Kind(u.buffer[0])
@@ -125,155 +118,144 @@ func (u *unpacker) decodeType() (reflect.Type, int, error) {
 		var ln uint64
 
 		n, err := readVarUint(u.reader, &ln, u.buffer[:])
-		total += n
+		u.read += uint64(n)
 		if err != nil {
-			return nil, total, err
+			return nil, err
 		}
 
-		innerType, n, err := u.decodeType()
-		total += n
+		innerType, err := u.decodeType()
 		if err != nil {
-			return nil, total, err
+			return nil, err
 		}
 
 		if innerType == nil {
-			return nil, total, ErrNil
+			return nil, ErrNil
 		}
 
-		return reflect.ArrayOf(int(ln), innerType), total, nil
+		return reflect.ArrayOf(int(ln), innerType), nil
 
 	case reflect.Map:
-		keyType, n, err := u.decodeType()
-		total += n
+		keyType, err := u.decodeType()
 		if err != nil {
-			return nil, total, err
+			return nil, err
 		}
 
 		if keyType == nil {
-			return nil, total, ErrNil
+			return nil, ErrNil
 		}
 
-		valType, n, err := u.decodeType()
-		total += n
+		valType, err := u.decodeType()
 		if err != nil {
-			return nil, total, err
+			return nil, err
 		}
 
 		if valType == nil {
-			return nil, total, ErrNil
+			return nil, ErrNil
 		}
 
-		return reflect.MapOf(keyType, valType), total, nil
+		return reflect.MapOf(keyType, valType), nil
 
 	case reflect.Slice:
-		innerType, n, err := u.decodeType()
-		total += n
+		innerType, err := u.decodeType()
 		if err != nil {
-			return nil, total, err
+			return nil, err
 		}
 
 		if innerType == nil {
-			return nil, total, ErrNil
+			return nil, ErrNil
 		}
 
-		return reflect.SliceOf(innerType), total, nil
+		return reflect.SliceOf(innerType), nil
 
 	case reflect.Pointer:
-		innerType, n, err := u.decodeType()
-		total += n
+		innerType, err := u.decodeType()
 		if err != nil {
-			return nil, total, err
+			return nil, err
 		}
 
 		if innerType == nil {
-			return nil, total, ErrNil
+			return nil, ErrNil
 		}
 
-		return reflect.PointerTo(innerType), total, nil
+		return reflect.PointerTo(innerType), nil
 
 	default:
 		typ, ok := kindToType[kind]
 		if ok {
-			return typ, total, nil
+			return typ, nil
 		}
 
 	}
 
-	return nil, total, ErrInvalidReceiver
+	return nil, ErrInvalidReceiver
 }
 
-func (u *unpacker) decodeMarked(info packerInfo) (reflect.Value, int, error) {
+func (u *unpacker) decodeMarked(info packerInfo) (reflect.Value, error) {
 	var (
-		total    int
 		receiver reflect.Value
 	)
 
-	typ, n, err := u.decodeType()
-	total += n
+	typ, err := u.decodeType()
 	if err != nil {
-		return reflect.Value{}, total, err
+		return reflect.Value{}, err
 	}
 
 	if typ == nil {
-		return reflect.Value{}, total, nil
+		return reflect.Value{}, nil
 	}
 
 	receiver = reflect.New(typ)
 
-	n, err = u.decode(receiver.Interface(), info)
-	total += n
+	err = u.decode(receiver.Interface(), info)
 	if err != nil {
-		return reflect.Value{}, total, err
+		return reflect.Value{}, err
 	}
 
-	return receiver.Elem(), total, err
+	return receiver.Elem(), err
 }
 
-func (u *unpacker) decode(data any, info packerInfo) (int, error) {
+func (u *unpacker) decode(data any, info packerInfo) error {
 	if info.ignore {
-		return 0, nil
+		return nil
 	}
 
 	if reflect.TypeOf(data).Kind() != reflect.Pointer {
-		return 0, ErrInvalidReceiver
+		return ErrInvalidReceiver
 	}
 
 	var (
 		typ = reflect.TypeOf(data).Elem()
 		val = reflect.ValueOf(data).Elem()
-
-		total int
 	)
 
 	switch typ.Kind() {
 	case reflect.Pointer:
 		n, err := u.reader.Read(u.buffer[:1])
-		total += n
+		u.read += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		if u.buffer[0] == 0 {
-			return total, nil
+			return nil
 		}
 
 		item := reflect.New(typ.Elem())
 
-		n, err = u.decode(item.Interface(), packerInfo{})
-		total += n
+		err = u.decode(item.Interface(), packerInfo{})
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		val.Set(item)
 
-		return total, nil
+		return nil
 
 	case reflect.Bool, reflect.Int8, reflect.Uint8:
 		n, err := u.reader.Read(u.buffer[:1])
-		total += n
+		u.read += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		switch typ.Kind() {
@@ -293,61 +275,61 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 
 		}
 
-		return total, nil
+		return nil
 
 	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64:
 		var num int64
 
 		n, err := readVarInt(u.reader, &num, u.buffer[:])
-		total += n
+		u.read += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		val.SetInt(num)
 
-		return total, nil
+		return nil
 
 	case reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		var num uint64
 
 		n, err := readVarUint(u.reader, &num, u.buffer[:])
-		total += n
+		u.read += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		val.SetUint(num)
 
-		return total, nil
+		return nil
 
 	case reflect.Float32:
 		n, err := io.ReadFull(u.reader, u.buffer[0:4])
-		total += n
+		u.read += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		val.SetFloat(float64(math.Float32frombits(binary.BigEndian.Uint32(u.buffer[0:4]))))
 
-		return total, nil
+		return nil
 
 	case reflect.Float64:
 		n, err := io.ReadFull(u.reader, u.buffer[0:8])
-		total += n
+		u.read += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		val.SetFloat(math.Float64frombits(binary.BigEndian.Uint64(u.buffer[0:8])))
 
-		return total, nil
+		return nil
 
 	case reflect.Complex64:
 		n, err := io.ReadFull(u.reader, u.buffer[0:8])
-		total += n
+		u.read += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		var (
@@ -357,28 +339,28 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 
 		val.SetComplex(complex(r, i))
 
-		return total, nil
+		return nil
 
 	case reflect.Complex128:
 		n, err := io.ReadFull(u.reader, u.buffer[0:8])
-		total += n
+		u.read += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		var r = math.Float64frombits(binary.BigEndian.Uint64(u.buffer[0:8]))
 
 		n, err = io.ReadFull(u.reader, u.buffer[0:8])
-		total += n
+		u.read += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		var i = math.Float64frombits(binary.BigEndian.Uint64(u.buffer[0:8]))
 
 		val.SetComplex(complex(r, i))
 
-		return total, nil
+		return nil
 
 	case reflect.Array:
 
@@ -389,24 +371,22 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 
 		if isInterface {
 			for i := 0; i < ln; i++ {
-				elem, n, err := u.decodeMarked(packerInfo{})
-				total += n
+				elem, err := u.decodeMarked(packerInfo{})
 				if err != nil {
-					return total, err
+					return err
 				}
 				val.Index(i).Set(elem)
 			}
 		} else {
 			for i := 0; i < ln; i++ {
-				n, err := u.decode(val.Index(i).Addr().Interface(), packerInfo{})
-				total += n
+				err := u.decode(val.Index(i).Addr().Interface(), packerInfo{})
 				if err != nil {
-					return total, err
+					return err
 				}
 			}
 		}
 
-		return total, nil
+		return nil
 
 	case reflect.Map:
 		var (
@@ -415,14 +395,15 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 		)
 
 		n, err := readVarInt(u.reader, &ln, u.buffer[:])
-		total += n
+		u.read += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
-		// If length is negative, keep map as nil
+		// If length is negative, set map to nil
 		if ln < 0 {
-			return total, nil
+			val.SetZero()
+			return nil
 		}
 
 		val.Set(reflect.MakeMap(typ))
@@ -430,27 +411,24 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 		for i := 0; i < int(ln); i++ {
 			curKey := reflect.New(typ.Key())
 
-			n, err := u.decode(curKey.Interface(), packerInfo{})
-			total += n
+			err := u.decode(curKey.Interface(), packerInfo{})
 			if err != nil {
-				return total, err
+				return err
 			}
 
 			var curVal reflect.Value
 
 			if isInterface {
-				curVal, n, err = u.decodeMarked(packerInfo{})
-				total += n
+				curVal, err = u.decodeMarked(packerInfo{})
 				if err != nil {
-					return total, err
+					return err
 				}
 			} else {
 				curVal = reflect.New(typ.Elem())
 
-				n, err := u.decode(curVal.Interface(), packerInfo{})
-				total += n
+				err := u.decode(curVal.Interface(), packerInfo{})
 				if err != nil {
-					return total, err
+					return err
 				}
 
 				curVal = curVal.Elem()
@@ -459,30 +437,29 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 			val.SetMapIndex(curKey.Elem(), curVal)
 		}
 
-		return total, nil
+		return nil
 
 	case reflect.Slice:
 
 		var ln uint64
 
 		n, err := readVarUint(u.reader, &ln, u.buffer[:])
-		total += n
+		u.read += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		switch typ.Elem().Kind() {
 		case reflect.Uint8:
 
-			data, n, err := u.decodeBytes(ln, info)
-			total += n
+			data, err := u.decodeBytes(ln, info)
 			if err != nil {
-				return total, err
+				return err
 			}
 
 			val.SetBytes(data)
 
-			return total, nil
+			return nil
 		}
 
 		var isInterface = typ.Elem().Kind() == reflect.Interface
@@ -491,44 +468,41 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 
 		if isInterface {
 			for i := 0; i < int(ln); i++ {
-				curItem, n, err := u.decodeMarked(packerInfo{})
-				total += n
+				curItem, err := u.decodeMarked(packerInfo{})
 				if err != nil {
-					return total, err
+					return err
 				}
 
 				val.Index(i).Set(curItem)
 			}
 		} else {
 			for i := 0; i < int(ln); i++ {
-				n, err := u.decode(val.Index(i).Addr().Interface(), packerInfo{})
-				total += n
+				err := u.decode(val.Index(i).Addr().Interface(), packerInfo{})
 				if err != nil {
-					return total, err
+					return err
 				}
 			}
 		}
 
-		return total, nil
+		return nil
 
 	case reflect.String:
 		var ln uint64
 
 		n, err := readVarUint(u.reader, &ln, u.buffer[:])
-		total += n
+		u.read += uint64(n)
 		if err != nil {
-			return total, err
+			return err
 		}
 
-		buf, n, err := u.decodeBytes(ln, info)
-		total += n
+		buf, err := u.decodeBytes(ln, info)
 		if err != nil {
-			return total, err
+			return err
 		}
 
 		val.SetString(*(*string)(unsafe.Pointer(&buf)))
 
-		return total, nil
+		return nil
 
 	case reflect.Struct:
 		ln := typ.NumField()
@@ -549,20 +523,18 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 			)
 
 			if isInterface {
-				item, n, err := u.decodeMarked(curInfo)
-				total += n
+				item, err := u.decodeMarked(curInfo)
 				if err != nil {
-					return total, err
+					return err
 				}
 
 				if (item != reflect.Value{}) {
 					curVal.Set(item)
 				}
 			} else {
-				n, err := u.decode(curVal.Addr().Interface(), curInfo)
-				total += n
+				err := u.decode(curVal.Addr().Interface(), curInfo)
 				if err != nil {
-					return total, err
+					return err
 				}
 			}
 		}
@@ -570,18 +542,18 @@ func (u *unpacker) decode(data any, info packerInfo) (int, error) {
 		if val.CanAddr() && reflect.PointerTo(typ).Implements(interfaceAfterUnpack) {
 			err := val.Addr().Interface().(AfterUnpack).AfterUnpack()
 			if err != nil {
-				return total, err
+				return err
 			}
 		} else if typ.Implements(interfaceAfterUnpack) {
 			err := val.Interface().(AfterUnpack).AfterUnpack()
 			if err != nil {
-				return total, err
+				return err
 			}
 		}
 
-		return total, nil
+		return nil
 
 	}
 
-	return total, &ErrInvalidType{typ}
+	return &ErrInvalidType{typ}
 }
