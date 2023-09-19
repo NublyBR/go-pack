@@ -3,10 +3,13 @@ package pack
 import "reflect"
 
 type Objects interface {
+	// Get ID of given Object
 	GetID(item any) (uint, bool)
 
+	// Get type of Object for given ID
 	GetType(id uint) (reflect.Type, bool)
 
+	// Insert new Objects
 	Push(items ...any) Objects
 }
 
