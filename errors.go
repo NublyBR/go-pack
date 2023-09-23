@@ -35,6 +35,14 @@ func (e *ErrInvalidType) Error() string {
 	return fmt.Sprintf("invalid type provided: %q", e.typ.String())
 }
 
+type ErrInvalidTypeKey struct {
+	typ reflect.Type
+}
+
+func (e *ErrInvalidTypeKey) Error() string {
+	return fmt.Sprintf("invalid type provided for a map key: %q", e.typ.String())
+}
+
 type ErrDataTooLarge struct {
 	typ reflect.Type
 

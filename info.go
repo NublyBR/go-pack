@@ -20,6 +20,10 @@ type packerInfo struct {
 	//
 	// Necessary for decoding data typed as interface{}
 	markType bool
+
+	objects string
+
+	forceAsObject bool
 }
 
 func parsePackerInfo(tag string) packerInfo {
@@ -47,6 +51,9 @@ func parsePackerInfo(tag string) packerInfo {
 
 		case "ignore":
 			info.ignore = true
+
+		case "objects":
+			info.objects = val
 		}
 
 	}

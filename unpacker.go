@@ -29,12 +29,13 @@ type unpacker struct {
 	buffer dataBuffer
 
 	objects   Objects
+	subobj    map[string]Objects
 	sizelimit uint64
 	stopat    uint64
 }
 
 func NewUnpacker(reader io.Reader, options ...Options) Unpacker {
-	u := &unpacker{realReader: reader}
+	u := &unpacker{realReader: reader, subobj: map[string]Objects{}}
 
 	for _, opt := range options {
 		if opt.WithObjects != nil {
@@ -42,6 +43,9 @@ func NewUnpacker(reader io.Reader, options ...Options) Unpacker {
 		}
 		if opt.SizeLimit > 0 {
 			u.sizelimit = opt.SizeLimit
+		}
+		for key, opt := range opt.WithSubObjects {
+			u.subobj[key] = opt
 		}
 	}
 
@@ -53,7 +57,6 @@ func NewUnpacker(reader io.Reader, options ...Options) Unpacker {
 }
 
 func (u *unpacker) Decode(data any) error {
-
 	if u.sizelimit > 0 {
 		u.stopat = u.read + u.sizelimit
 		u.reader = &limitedReader{
@@ -64,35 +67,7 @@ func (u *unpacker) Decode(data any) error {
 	}
 
 	if u.objects != nil {
-
-		if reflect.TypeOf(data) != typePointerToInterface {
-			return ErrMustBePointerToInterface
-		}
-
-		var oid uint64
-
-		n, err := readVarUint(u.reader, &oid, u.buffer[:])
-		u.read += uint64(n)
-		if err != nil {
-			return err
-		}
-
-		typ, exists := u.objects.GetType(uint(oid))
-		if !exists {
-			return &ErrNotDefined{oid: uint(oid)}
-		}
-
-		item := reflect.New(typ)
-
-		err = u.decode(item.Interface(), packerInfo{})
-		if err != nil {
-			return err
-		}
-
-		reflect.ValueOf(data).Elem().Set(item)
-
-		return nil
-
+		return u.decodeObject(data, u.objects, packerInfo{})
 	}
 
 	return u.decode(data, packerInfo{})
@@ -104,6 +79,35 @@ func (u *unpacker) BytesRead() uint64 {
 
 func (u *unpacker) ResetCounter() {
 	u.read = 0
+}
+
+func (u *unpacker) decodeObject(data any, objects Objects, info packerInfo) error {
+	if reflect.TypeOf(data) != typePointerToInterface {
+		return ErrMustBePointerToInterface
+	}
+
+	var oid uint64
+
+	n, err := readVarUint(u.reader, &oid, u.buffer[:])
+	u.read += uint64(n)
+	if err != nil {
+		return err
+	}
+
+	typ, exists := objects.GetType(uint(oid))
+	if !exists {
+		return &ErrNotDefined{oid: uint(oid)}
+	}
+
+	item := reflect.New(typ)
+
+	err = u.decode(item.Interface(), info)
+	if err != nil {
+		return err
+	}
+
+	reflect.ValueOf(data).Elem().Set(item)
+	return nil
 }
 
 func (u *unpacker) decodeBytes(ln uint64, info packerInfo) ([]byte, error) {
@@ -174,6 +178,10 @@ func (u *unpacker) decodeType() (reflect.Type, error) {
 			return nil, ErrNil
 		}
 
+		if !keyType.Comparable() {
+			return nil, &ErrInvalidType{typ: keyType}
+		}
+
 		valType, err := u.decodeType()
 		if err != nil {
 			return nil, err
@@ -231,7 +239,7 @@ func (u *unpacker) decodeMarked(info packerInfo) (reflect.Value, error) {
 	}
 
 	if typ == nil {
-		return reflect.Value{}, nil
+		return reflect.Zero(reflect.TypeOf([]any{}).Elem()), nil
 	}
 
 	receiver = reflect.New(typ)
@@ -408,12 +416,21 @@ func (u *unpacker) decode(data any, info packerInfo) error {
 		}
 
 		if isInterface {
-			for i := 0; i < ln; i++ {
-				elem, err := u.decodeMarked(packerInfo{})
-				if err != nil {
-					return err
+			if objects, ok := u.subobj[info.objects]; ok {
+				for i := 0; i < ln; i++ {
+					err := u.decodeObject(val.Index(i).Addr().Interface(), objects, packerInfo{})
+					if err != nil {
+						return err
+					}
 				}
-				val.Index(i).Set(elem)
+			} else {
+				for i := 0; i < ln; i++ {
+					elem, err := u.decodeMarked(packerInfo{})
+					if err != nil {
+						return err
+					}
+					val.Index(i).Set(elem)
+				}
 			}
 		} else {
 			for i := 0; i < ln; i++ {
@@ -454,33 +471,69 @@ func (u *unpacker) decode(data any, info packerInfo) error {
 
 		val.Set(reflect.MakeMap(typ))
 
-		for i := 0; i < int(ln); i++ {
-			curKey := reflect.New(typ.Key())
+		if isInterface {
 
-			err := u.decode(curKey.Interface(), packerInfo{})
-			if err != nil {
-				return err
+			if objects, ok := u.subobj[info.objects]; ok {
+				for i := 0; i < int(ln); i++ {
+					curKey := reflect.New(typ.Key())
+
+					err := u.decode(curKey.Interface(), packerInfo{})
+					if err != nil {
+						return err
+					}
+
+					var curVal = reflect.New(reflect.TypeOf([]any{}).Elem())
+
+					err = u.decodeObject(curVal.Interface(), objects, packerInfo{})
+					if err != nil {
+						return err
+					}
+
+					val.SetMapIndex(curKey.Elem(), curVal.Elem())
+				}
+			} else {
+				for i := 0; i < int(ln); i++ {
+					curKey := reflect.New(typ.Key())
+
+					err := u.decode(curKey.Interface(), packerInfo{})
+					if err != nil {
+						return err
+					}
+
+					var curVal reflect.Value
+
+					curVal, err = u.decodeMarked(packerInfo{})
+					if err != nil {
+						return err
+					}
+
+					val.SetMapIndex(curKey.Elem(), curVal)
+				}
 			}
 
-			var curVal reflect.Value
+		} else {
 
-			if isInterface {
-				curVal, err = u.decodeMarked(packerInfo{})
+			for i := 0; i < int(ln); i++ {
+				curKey := reflect.New(typ.Key())
+
+				err := u.decode(curKey.Interface(), packerInfo{})
 				if err != nil {
 					return err
 				}
-			} else {
+
+				var curVal reflect.Value
+
 				curVal = reflect.New(typ.Elem())
 
-				err := u.decode(curVal.Interface(), packerInfo{})
+				err = u.decode(curVal.Interface(), packerInfo{})
 				if err != nil {
 					return err
 				}
 
 				curVal = curVal.Elem()
-			}
 
-			val.SetMapIndex(curKey.Elem(), curVal)
+				val.SetMapIndex(curKey.Elem(), curVal)
+			}
 		}
 
 		return nil
@@ -521,13 +574,22 @@ func (u *unpacker) decode(data any, info packerInfo) error {
 		val.Set(reflect.MakeSlice(typ, int(ln), int(ln)))
 
 		if isInterface {
-			for i := 0; i < int(ln); i++ {
-				curItem, err := u.decodeMarked(packerInfo{})
-				if err != nil {
-					return err
+			if objects, ok := u.subobj[info.objects]; ok {
+				for i := 0; i < int(ln); i++ {
+					err := u.decodeObject(val.Index(i).Addr().Interface(), objects, packerInfo{})
+					if err != nil {
+						return err
+					}
 				}
+			} else {
+				for i := 0; i < int(ln); i++ {
+					curItem, err := u.decodeMarked(packerInfo{})
+					if err != nil {
+						return err
+					}
 
-				val.Index(i).Set(curItem)
+					val.Index(i).Set(curItem)
+				}
 			}
 		} else {
 			for i := 0; i < int(ln); i++ {
@@ -577,13 +639,20 @@ func (u *unpacker) decode(data any, info packerInfo) error {
 			)
 
 			if isInterface {
-				item, err := u.decodeMarked(curInfo)
-				if err != nil {
-					return err
-				}
+				if objects, ok := u.subobj[curInfo.objects]; ok {
+					err := u.decodeObject(curVal.Addr().Interface(), objects, curInfo)
+					if err != nil {
+						return err
+					}
+				} else {
+					item, err := u.decodeMarked(curInfo)
+					if err != nil {
+						return err
+					}
 
-				if (item != reflect.Value{}) {
-					curVal.Set(item)
+					if (item != reflect.Value{}) {
+						curVal.Set(item)
+					}
 				}
 			} else {
 				err := u.decode(curVal.Addr().Interface(), curInfo)

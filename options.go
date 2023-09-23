@@ -10,6 +10,11 @@ type Options struct {
 	// is being decoded beforehand.
 	WithObjects Objects
 
+	// Allows you to defined a list of allowed types to exist within a struct field
+	// with type: any, []any, [...]any or map[...]any;
+	// by tagging it with `pack:"objects:mapkey"`
+	WithSubObjects map[string]Objects
+
 	// Limit the amount of bytes a packer is able to write for a top-level object
 	// and the amount of bytes an unpacker is able to read.
 	// Once the limit is about to be passed, an error of type ErrDataTooLarge will

@@ -30,12 +30,13 @@ type packer struct {
 	buffer  dataBuffer
 
 	objects   Objects
+	subobj    map[string]Objects
 	sizelimit uint64
 	stopat    uint64
 }
 
 func NewPacker(writer io.Writer, options ...Options) Packer {
-	p := &packer{realWriter: writer}
+	p := &packer{realWriter: writer, subobj: map[string]Objects{}}
 
 	for _, opt := range options {
 		if opt.WithObjects != nil {
@@ -43,6 +44,9 @@ func NewPacker(writer io.Writer, options ...Options) Packer {
 		}
 		if opt.SizeLimit > 0 {
 			p.sizelimit = opt.SizeLimit
+		}
+		for key, opt := range opt.WithSubObjects {
+			p.subobj[key] = opt
 		}
 	}
 
@@ -64,25 +68,7 @@ func (p *packer) Encode(data any) error {
 	}
 
 	if p.objects != nil {
-
-		for reflect.TypeOf(data).Kind() == reflect.Pointer {
-			val := reflect.ValueOf(data)
-			if val.IsNil() {
-				return ErrNilObject
-			}
-			data = val.Elem().Interface()
-		}
-
-		oid, exists := p.objects.GetID(data)
-		if !exists {
-			return &ErrNotDefined{typ: reflect.TypeOf(data)}
-		}
-
-		n, err := writeVarUint(p.writer, uint64(oid), p.buffer[:])
-		p.written += uint64(n)
-		if err != nil {
-			return err
-		}
+		return p.encodeObject(data, p.objects, packerInfo{})
 	}
 
 	return p.encode(data, packerInfo{})
@@ -94,6 +80,31 @@ func (p *packer) BytesWritten() uint64 {
 
 func (p *packer) ResetCounter() {
 	p.written = 0
+}
+
+func (p *packer) encodeObject(data any, objects Objects, info packerInfo) error {
+	for reflect.TypeOf(data).Kind() == reflect.Pointer {
+		val := reflect.ValueOf(data)
+		if val.IsNil() {
+			return ErrNilObject
+		}
+		data = val.Elem().Interface()
+	}
+
+	oid, exists := objects.GetID(data)
+	if !exists {
+		return &ErrNotDefined{typ: reflect.TypeOf(data)}
+	}
+
+	n, err := writeVarUint(p.writer, uint64(oid), p.buffer[:])
+	p.written += uint64(n)
+	if err != nil {
+		return err
+	}
+
+	info.forceAsObject = true
+
+	return p.encode(data, info)
 }
 
 func (p *packer) encodeBytes(data []byte, inf packerInfo) error {
@@ -306,10 +317,19 @@ func (p *packer) encode(data any, info packerInfo) error {
 			ln          = typ.Len()
 		)
 
-		for i := 0; i < ln; i++ {
-			err = p.encode(val.Index(i).Interface(), packerInfo{markType: isInterface})
-			if err != nil {
-				return err
+		if objects, ok := p.subobj[info.objects]; ok {
+			for i := 0; i < ln; i++ {
+				err = p.encodeObject(val.Index(i).Interface(), objects, packerInfo{})
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			for i := 0; i < ln; i++ {
+				err = p.encode(val.Index(i).Interface(), packerInfo{markType: isInterface})
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -346,20 +366,41 @@ func (p *packer) encode(data any, info packerInfo) error {
 
 		iter := val.MapRange()
 
-		for iter.Next() {
-			var (
-				curKey = iter.Key()
-				curVal = iter.Value()
-			)
-
-			err = p.encode(curKey.Interface(), packerInfo{})
-			if err != nil {
-				return err
+		if objects, ok := p.subobj[info.objects]; ok {
+			for i := 0; i < ln; i++ {
 			}
+			for iter.Next() {
+				var (
+					curKey = iter.Key()
+					curVal = iter.Value()
+				)
 
-			err = p.encode(curVal.Interface(), packerInfo{markType: isInterface})
-			if err != nil {
-				return err
+				err = p.encode(curKey.Interface(), packerInfo{})
+				if err != nil {
+					return err
+				}
+
+				err = p.encodeObject(curVal.Interface(), objects, packerInfo{})
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			for iter.Next() {
+				var (
+					curKey = iter.Key()
+					curVal = iter.Value()
+				)
+
+				err = p.encode(curKey.Interface(), packerInfo{})
+				if err != nil {
+					return err
+				}
+
+				err = p.encode(curVal.Interface(), packerInfo{markType: isInterface})
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -395,10 +436,19 @@ func (p *packer) encode(data any, info packerInfo) error {
 			return err
 		}
 
-		for i := 0; i < ln; i++ {
-			err := p.encode(val.Index(i).Interface(), packerInfo{markType: isInterface})
-			if err != nil {
-				return err
+		if objects, ok := p.subobj[info.objects]; ok {
+			for i := 0; i < ln; i++ {
+				err = p.encodeObject(val.Index(i).Interface(), objects, packerInfo{})
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			for i := 0; i < ln; i++ {
+				err := p.encode(val.Index(i).Interface(), packerInfo{markType: isInterface})
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -442,11 +492,17 @@ func (p *packer) encode(data any, info packerInfo) error {
 				isInterface = curFieldTyp.Type.Kind() == reflect.Interface
 			)
 
-			curInfo.markType = isInterface
-
-			err := p.encode(curVal.Interface(), curInfo)
-			if err != nil {
-				return err
+			if objects, ok := p.subobj[curInfo.objects]; ok && isInterface {
+				err := p.encodeObject(curVal.Interface(), objects, curInfo)
+				if err != nil {
+					return err
+				}
+			} else {
+				curInfo.markType = isInterface
+				err := p.encode(curVal.Interface(), curInfo)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
