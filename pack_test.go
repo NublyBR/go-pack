@@ -63,6 +63,9 @@ func TestPack(t *testing.T) {
 			// []byte
 			[]byte("Hello, World!"),
 
+			// []bool
+			[]bool{true, false, true, false, true, false, true, false, true, false},
+
 			// []string
 			[]string{"Hello", "World"},
 

@@ -20,6 +20,15 @@ type Packer interface {
 
 	// Reset bytes written to 0
 	ResetCounter()
+
+	// Set objects
+	SetObjects(objects Objects)
+
+	// Set sub-objects
+	SetSubObjects(subObjects map[string]Objects)
+
+	// Set size limit
+	SetSizeLimit(sizeLimit uint64)
 }
 
 type packer struct {
@@ -82,6 +91,18 @@ func (p *packer) ResetCounter() {
 	p.written = 0
 }
 
+func (p *packer) SetObjects(objects Objects) {
+	p.objects = objects
+}
+
+func (p *packer) SetSubObjects(subObjects map[string]Objects) {
+	p.subobj = subObjects
+}
+
+func (p *packer) SetSizeLimit(sizeLimit uint64) {
+	p.sizelimit = sizeLimit
+}
+
 func (p *packer) encodeObject(data any, objects Objects, info packerInfo) error {
 	for reflect.TypeOf(data).Kind() == reflect.Pointer {
 		val := reflect.ValueOf(data)
@@ -128,6 +149,40 @@ func (p *packer) encodeBytes(data []byte, inf packerInfo) error {
 	p.written += uint64(n)
 
 	return err
+}
+
+func (p *packer) encodeBoolSlice(data []bool, inf packerInfo) error {
+	var ln = uint64((len(data) + 7) / 8)
+
+	if inf.maxSize > 0 && ln > inf.maxSize {
+		return &ErrDataTooLarge{typ: reflect.TypeOf(data), max: inf.maxSize, size: uint64(len(data))}
+	}
+
+	if p.stopat > 0 && p.written+ln > p.stopat {
+		return &ErrDataTooLarge{max: p.sizelimit, size: p.written + ln}
+	}
+
+	n, err := writeVarUint(p.writer, uint64(len(data)), p.buffer[:])
+	p.written += uint64(n)
+	if err != nil {
+		return err
+	}
+
+	for j := 0; j < len(data); j += 8 {
+		p.buffer[0] = 0
+		for i := 0; i < 8 && j+i < len(data); i++ {
+			if data[j+i] {
+				p.buffer[0] |= byte(1 << i)
+			}
+		}
+		n, err = p.writer.Write(p.buffer[:1])
+		p.written += uint64(n)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (p *packer) encodeType(typ reflect.Type) error {
@@ -224,10 +279,7 @@ func (p *packer) encode(data any, info packerInfo) error {
 			p.buffer[0] = 0
 			n, err = p.writer.Write(p.buffer[:1])
 			p.written += uint64(n)
-			if err != nil {
-				return err
-			}
-			return nil
+			return err
 		}
 
 		p.buffer[0] = 1
@@ -410,11 +462,10 @@ func (p *packer) encode(data any, info packerInfo) error {
 
 		switch typ.Elem().Kind() {
 		case reflect.Uint8:
-			err = p.encodeBytes(val.Bytes(), info)
-			if err != nil {
-				return err
-			}
-			return nil
+			return p.encodeBytes(val.Bytes(), info)
+
+		case reflect.Bool:
+			return p.encodeBoolSlice(val.Interface().([]bool), info)
 		}
 
 		var (

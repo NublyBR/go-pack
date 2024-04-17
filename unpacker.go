@@ -19,6 +19,9 @@ type Unpacker interface {
 
 	// Reset bytes read to 0
 	ResetCounter()
+
+	// Set objects
+	SetObjects(objects Objects)
 }
 
 type unpacker struct {
@@ -81,6 +84,18 @@ func (u *unpacker) ResetCounter() {
 	u.read = 0
 }
 
+func (u *unpacker) SetObjects(objects Objects) {
+	u.objects = objects
+}
+
+func (u *unpacker) SetSubObjects(subObjects map[string]Objects) {
+	u.subobj = subObjects
+}
+
+func (u *unpacker) SetSizeLimit(sizeLimit uint64) {
+	u.sizelimit = sizeLimit
+}
+
 func (u *unpacker) decodeObject(data any, objects Objects, info packerInfo) error {
 	if reflect.TypeOf(data) != typePointerToInterface {
 		return ErrMustBePointerToInterface
@@ -132,6 +147,38 @@ func (u *unpacker) decodeBytes(ln uint64, info packerInfo) ([]byte, error) {
 	}
 
 	return buf, err
+}
+
+func (u *unpacker) decodeBoolSlice(tln uint64, info packerInfo) ([]bool, error) {
+	ln := (tln + 7) / 8
+
+	if info.maxSize > 0 && ln > uint64(info.maxSize) {
+		return nil, &ErrDataTooLarge{typ: reflect.TypeOf([]byte{}), max: info.maxSize, size: ln}
+	}
+
+	if u.stopat > 0 && u.read+ln > u.stopat {
+		return nil, &ErrDataTooLarge{max: u.sizelimit, size: u.read + ln - (u.stopat - u.sizelimit)}
+	}
+
+	if ln == 0 {
+		return nil, nil
+	}
+
+	var buf = make([]bool, int(tln))
+
+	for j := 0; j < int(tln); j += 8 {
+		n, err := u.reader.Read(u.buffer[:1])
+		u.read += uint64(n)
+		if err != nil {
+			return nil, err
+		}
+
+		for i := 0; i < 8 && j+i < int(tln); i++ {
+			buf[j+i] = u.buffer[0]&(1<<i) != 0
+		}
+	}
+
+	return buf, nil
 }
 
 func (u *unpacker) decodeType() (reflect.Type, error) {
@@ -559,6 +606,18 @@ func (u *unpacker) decode(data any, info packerInfo) error {
 			val.SetBytes(data)
 
 			return nil
+
+		case reflect.Bool:
+
+			data, err := u.decodeBoolSlice(ln, info)
+			if err != nil {
+				return err
+			}
+
+			val.Set(reflect.ValueOf(data))
+
+			return nil
+
 		}
 
 		if info.maxSize > 0 && uint64(ln) > info.maxSize {
