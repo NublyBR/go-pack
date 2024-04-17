@@ -22,6 +22,12 @@ type Unpacker interface {
 
 	// Set objects
 	SetObjects(objects Objects)
+
+	// Set sub-objects
+	SetSubObjects(subObjects map[string]Objects)
+
+	// Set size limit
+	SetSizeLimit(sizeLimit uint64)
 }
 
 type unpacker struct {
