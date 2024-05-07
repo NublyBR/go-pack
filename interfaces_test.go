@@ -16,6 +16,9 @@ func (a *objectBeforePack) BeforePack() error {
 }
 
 func TestBeforePack(t *testing.T) {
+
+	t.Parallel()
+
 	var (
 		input = objectBeforePack{
 			Val: "Hello, World!",
@@ -43,6 +46,9 @@ func (a *objectAfterUnpack) AfterUnpack() error {
 	return nil
 }
 func TestAfterUnpack(t *testing.T) {
+
+	t.Parallel()
+
 	var (
 		input = objectAfterUnpack{
 			Val: "Hello, World!",

@@ -7,6 +7,7 @@ import (
 )
 
 var (
+	ErrInvalidPackedInt         = errors.New("invalid packed int")
 	ErrInvalidPackedUint        = errors.New("invalid packed uint")
 	ErrInvalidReceiver          = errors.New("invalid argument given to Decode, not a pointer type")
 	ErrNil                      = errors.New("attempted to encode nil outside of pointer or interface context")

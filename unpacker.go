@@ -109,7 +109,7 @@ func (u *unpacker) decodeObject(data any, objects Objects, info packerInfo) erro
 
 	var oid uint64
 
-	n, err := readVarUint(u.reader, &oid, u.buffer[:])
+	n, err := ReadVarUint(u.reader, &oid, u.buffer[:])
 	u.read += uint64(n)
 	if err != nil {
 		return err
@@ -200,7 +200,7 @@ func (u *unpacker) decodeType() (reflect.Type, error) {
 	case reflect.Array:
 		var ln uint64
 
-		n, err := readVarUint(u.reader, &ln, u.buffer[:])
+		n, err := ReadVarUint(u.reader, &ln, u.buffer[:])
 		u.read += uint64(n)
 		if err != nil {
 			return nil, err
@@ -371,7 +371,7 @@ func (u *unpacker) decode(data any, info packerInfo) error {
 	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64:
 		var num int64
 
-		n, err := readVarInt(u.reader, &num, u.buffer[:])
+		n, err := ReadVarInt(u.reader, &num, u.buffer[:])
 		u.read += uint64(n)
 		if err != nil {
 			return err
@@ -384,7 +384,7 @@ func (u *unpacker) decode(data any, info packerInfo) error {
 	case reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		var num uint64
 
-		n, err := readVarUint(u.reader, &num, u.buffer[:])
+		n, err := ReadVarUint(u.reader, &num, u.buffer[:])
 		u.read += uint64(n)
 		if err != nil {
 			return err
@@ -502,7 +502,7 @@ func (u *unpacker) decode(data any, info packerInfo) error {
 			ln          int64
 		)
 
-		n, err := readVarInt(u.reader, &ln, u.buffer[:])
+		n, err := ReadVarInt(u.reader, &ln, u.buffer[:])
 		u.read += uint64(n)
 		if err != nil {
 			return err
@@ -595,7 +595,7 @@ func (u *unpacker) decode(data any, info packerInfo) error {
 
 		var ln uint64
 
-		n, err := readVarUint(u.reader, &ln, u.buffer[:])
+		n, err := ReadVarUint(u.reader, &ln, u.buffer[:])
 		u.read += uint64(n)
 		if err != nil {
 			return err
@@ -670,7 +670,7 @@ func (u *unpacker) decode(data any, info packerInfo) error {
 	case reflect.String:
 		var ln uint64
 
-		n, err := readVarUint(u.reader, &ln, u.buffer[:])
+		n, err := ReadVarUint(u.reader, &ln, u.buffer[:])
 		u.read += uint64(n)
 		if err != nil {
 			return err

@@ -117,7 +117,7 @@ func (p *packer) encodeObject(data any, objects Objects, info packerInfo) error 
 		return &ErrNotDefined{typ: reflect.TypeOf(data)}
 	}
 
-	n, err := writeVarUint(p.writer, uint64(oid), p.buffer[:])
+	n, err := WriteVarUint(p.writer, uint64(oid), p.buffer[:])
 	p.written += uint64(n)
 	if err != nil {
 		return err
@@ -139,7 +139,7 @@ func (p *packer) encodeBytes(data []byte, inf packerInfo) error {
 		return &ErrDataTooLarge{max: p.sizelimit, size: p.written + ln}
 	}
 
-	n, err := writeVarUint(p.writer, ln, p.buffer[:])
+	n, err := WriteVarUint(p.writer, ln, p.buffer[:])
 	p.written += uint64(n)
 	if err != nil {
 		return err
@@ -162,7 +162,7 @@ func (p *packer) encodeBoolSlice(data []bool, inf packerInfo) error {
 		return &ErrDataTooLarge{max: p.sizelimit, size: p.written + ln}
 	}
 
-	n, err := writeVarUint(p.writer, uint64(len(data)), p.buffer[:])
+	n, err := WriteVarUint(p.writer, uint64(len(data)), p.buffer[:])
 	p.written += uint64(n)
 	if err != nil {
 		return err
@@ -214,7 +214,7 @@ func (p *packer) encodeType(typ reflect.Type) error {
 		}
 
 	case reflect.Array:
-		n, err := writeVarUint(p.writer, uint64(typ.Len()), p.buffer[:])
+		n, err := WriteVarUint(p.writer, uint64(typ.Len()), p.buffer[:])
 		p.written += uint64(n)
 		if err != nil {
 			return err
@@ -317,12 +317,12 @@ func (p *packer) encode(data any, info packerInfo) error {
 		return err
 
 	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64:
-		n, err = writeVarInt(p.writer, val.Int(), p.buffer[:])
+		n, err = WriteVarInt(p.writer, val.Int(), p.buffer[:])
 		p.written += uint64(n)
 		return err
 
 	case reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		n, err = writeVarUint(p.writer, val.Uint(), p.buffer[:])
+		n, err = WriteVarUint(p.writer, val.Uint(), p.buffer[:])
 		p.written += uint64(n)
 		return err
 
@@ -406,7 +406,7 @@ func (p *packer) encode(data any, info packerInfo) error {
 			ln = -1
 		}
 
-		n, err = writeVarInt(p.writer, int64(ln), p.buffer[:])
+		n, err = WriteVarInt(p.writer, int64(ln), p.buffer[:])
 		p.written += uint64(n)
 		if err != nil {
 			return err
@@ -481,7 +481,7 @@ func (p *packer) encode(data any, info packerInfo) error {
 			return &ErrDataTooLarge{max: p.sizelimit, size: p.written + uint64(ln)}
 		}
 
-		n, err = writeVarUint(p.writer, uint64(ln), p.buffer[:])
+		n, err = WriteVarUint(p.writer, uint64(ln), p.buffer[:])
 		p.written += uint64(n)
 		if err != nil {
 			return err

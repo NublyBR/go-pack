@@ -65,3 +65,14 @@ func TestFuzz(t *testing.T) {
 	}
 
 }
+
+func TestFuzzInts(t *testing.T) {
+	var data = make([]byte, 10)
+
+	for i := 0; i < 100_000; i++ {
+		rand.Read(data[i%11:])
+
+		_, _, _ = GetVarInt(data)
+		_, _, _ = GetVarUint(data)
+	}
+}

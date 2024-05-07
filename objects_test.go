@@ -7,6 +7,9 @@ import (
 )
 
 func TestObjects(t *testing.T) {
+
+	t.Parallel()
+
 	type objectA struct {
 		Val string
 	}
@@ -102,6 +105,9 @@ func TestObjects(t *testing.T) {
 }
 
 func TestSubObjects(t *testing.T) {
+
+	t.Parallel()
+
 	type objectA struct {
 		Val string
 	}

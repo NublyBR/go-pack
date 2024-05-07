@@ -14,7 +14,6 @@ func TestVarUint(t *testing.T) {
 
 		buf = bytes.NewBuffer(nil)
 
-		output uint64
 		inputs = []uint64{
 			0x00, 0x01, 0x7f, 0x80,
 			0xff, 0xffff, 0xffffff, 0xffffffff,
@@ -29,22 +28,41 @@ func TestVarUint(t *testing.T) {
 
 		buf.Reset()
 
-		written, err := writeVarUint(buf, input, b[:])
+		expectedSize := SizeVarUint(input)
+
+		written, err := WriteVarUint(buf, input, b[:])
 		if err != nil {
 			t.Error(err)
 		}
 
-		read, err := readVarUint(buf, &output, b[:])
+		if written != expectedSize {
+			t.Errorf("Expected bytes written by WriteVarUint(%d) to be %d, got %d", input, expectedSize, written)
+		}
+
+		output, getRead, err := GetVarUint(buf.Bytes())
 		if err != nil {
 			t.Error(err)
 		}
 
 		if input != output {
-			t.Errorf("Expected result from readVarUint(...) to be the same as input to writeVarUint(...): got %d, expected %d", output, input)
+			t.Errorf("Expected result from GetVarUint(%d) to be the same as input to WriteVarUint(...): got %d, expected %d", input, output, input)
+		}
+
+		if written != getRead {
+			t.Errorf("Expected bytes read by GetVarUint(%d) to be the same as bytes written by WriteVarUint(...): got %d, expected %d", input, getRead, written)
+		}
+
+		read, err := ReadVarUint(buf, &output, b[:])
+		if err != nil {
+			t.Error(err)
+		}
+
+		if input != output {
+			t.Errorf("Expected result from ReadVarUint(...) to be the same as input to WriteVarUint(...): got %d, expected %d", output, input)
 		}
 
 		if written != read {
-			t.Errorf("Expected bytes read by readVarUint(...) to be the same as bytes written by writeVarUint(...): got %d, expected %d", read, written)
+			t.Errorf("Expected bytes read by ReadVarUint(...) to be the same as bytes written by WriteVarUint(...): got %d, expected %d", read, written)
 		}
 	}
 }
