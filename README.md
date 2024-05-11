@@ -1,5 +1,6 @@
 # 📦 Pack
 
+[![Build Status](https://github.com/NublyBR/go-pack/actions/workflows/go.yml/badge.svg?branch=main)](https://github.com/NublyBR/go-pack/actions/workflows/go.yml/badge.svg?query=branch%3Amain)
 [![GoDoc](https://godoc.org/github.com/NublyBR/go-pack?status.png)](http://godoc.org/github.com/NublyBR/go-pack)
 [![Go Report Card](https://goreportcard.com/badge/github.com/NublyBR/go-pack?)](https://goreportcard.com/report/github.com/NublyBR/go-pack)
 
