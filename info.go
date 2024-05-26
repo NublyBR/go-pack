@@ -24,10 +24,32 @@ type packerInfo struct {
 	objects string
 
 	forceAsObject bool
+
+	seen map[uintptr]bool
 }
 
-func parsePackerInfo(tag string) packerInfo {
+func (p packerInfo) dupeSeen() map[uintptr]bool {
+	var ret = map[uintptr]bool{}
+
+	if p.seen == nil {
+		return ret
+	}
+
+	for k := range p.seen {
+		ret[k] = true
+	}
+
+	return ret
+}
+
+func parsePackerInfo(tag string, old ...packerInfo) packerInfo {
 	var info packerInfo
+
+	if len(old) > 0 {
+		info.seen = old[0].dupeSeen()
+	} else {
+		info.seen = map[uintptr]bool{}
+	}
 
 	if tag == "" {
 		return info

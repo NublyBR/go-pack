@@ -270,6 +270,27 @@ func TestPackerLimit(t *testing.T) {
 	}
 }
 
+func TestPackerRecursive(t *testing.T) {
+	type Recursive struct {
+		Value *Recursive
+	}
+
+	var (
+		r Recursive
+
+		buf = bytes.NewBuffer(nil)
+
+		packer = NewPacker(buf, Options{})
+	)
+
+	r.Value = &r
+
+	err := packer.Encode(r)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func TestUnpackerLimit(t *testing.T) {
 
 	t.Parallel()

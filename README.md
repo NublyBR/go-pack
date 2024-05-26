@@ -58,14 +58,14 @@ go get -u github.com/NublyBR/go-pack
 ```
 $ go test -benchmem -bench=.
 
-goos: windows
+goos: linux
 goarch: amd64
 pkg: github.com/NublyBR/go-pack
 cpu: Intel(R) Core(TM) i5-9600K CPU @ 3.70GHz
-BenchmarkPacker-6        1200792             992.7 ns/op             168 B/op         10 allocs/op
-BenchmarkUnpacker-6       599826              2010 ns/op             656 B/op         27 allocs/op
+BenchmarkPacker-6         593944              1691 ns/op             744 B/op         22 allocs/op
+BenchmarkUnpacker-6       467187              2421 ns/op             896 B/op         32 allocs/op
 PASS
-ok      github.com/NublyBR/go-pack      3.539s
+ok      github.com/NublyBR/go-pack      2.619s
 ```
 
 The benchmarks are executed by packing/unpacking the following struct:
