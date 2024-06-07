@@ -13,6 +13,7 @@ var (
 	ErrNil                      = errors.New("attempted to encode nil outside of pointer or interface context")
 	ErrNilObject                = errors.New("may not encode nil in object mode")
 	ErrMustBePointerToInterface = errors.New("in Objects mode, value given to Decode must be of type *interface{}")
+	ErrCycle                    = errors.New("circular reference detected")
 )
 
 type ErrNotDefined struct {

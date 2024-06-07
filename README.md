@@ -62,10 +62,10 @@ goos: linux
 goarch: amd64
 pkg: github.com/NublyBR/go-pack
 cpu: Intel(R) Core(TM) i5-9600K CPU @ 3.70GHz
-BenchmarkPacker-6         593944              1691 ns/op             744 B/op         22 allocs/op
-BenchmarkUnpacker-6       467187              2421 ns/op             896 B/op         32 allocs/op
+BenchmarkPacker-6         674068              1619 ns/op            1000 B/op         23 allocs/op
+BenchmarkUnpacker-6       526233              2101 ns/op             656 B/op         27 allocs/op
 PASS
-ok      github.com/NublyBR/go-pack      2.619s
+ok      github.com/NublyBR/go-pack      2.669s
 ```
 
 The benchmarks are executed by packing/unpacking the following struct:

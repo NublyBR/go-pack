@@ -25,30 +25,32 @@ type packerInfo struct {
 
 	forceAsObject bool
 
-	seen map[uintptr]bool
+	seen seen
 }
 
-func (p packerInfo) dupeSeen() map[uintptr]bool {
-	var ret = map[uintptr]bool{}
+type seen []uintptr
 
-	if p.seen == nil {
-		return ret
+func (s *seen) push(a uintptr) error {
+	for i := len(*s); i > 0; i-- {
+		if (*s)[i-1] == a {
+			return ErrCycle
+		}
 	}
 
-	for k := range p.seen {
-		ret[k] = true
-	}
+	*s = append(*s, a)
 
-	return ret
+	return nil
+}
+
+func (s *seen) pop() {
+	*s = (*s)[:len(*s)-1]
 }
 
 func parsePackerInfo(tag string, old ...packerInfo) packerInfo {
 	var info packerInfo
 
 	if len(old) > 0 {
-		info.seen = old[0].dupeSeen()
-	} else {
-		info.seen = map[uintptr]bool{}
+		info.seen = old[0].seen
 	}
 
 	if tag == "" {

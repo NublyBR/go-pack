@@ -77,10 +77,10 @@ func (p *packer) Encode(data any) error {
 	}
 
 	if p.objects != nil {
-		return p.encodeObject(data, p.objects, packerInfo{seen: map[uintptr]bool{}})
+		return p.encodeObject(data, p.objects, packerInfo{})
 	}
 
-	return p.encode(data, packerInfo{seen: map[uintptr]bool{}})
+	return p.encode(data, packerInfo{})
 }
 
 func (p *packer) BytesWritten() uint64 {
@@ -282,16 +282,14 @@ func (p *packer) encode(data any, info packerInfo) error {
 			return err
 		}
 
-		if info.seen != nil {
-			var ptr = val.Pointer()
-			if info.seen[ptr] {
-				p.buffer[0] = 0
-				n, err = p.writer.Write(p.buffer[:1])
-				p.written += uint64(n)
-				return err
-			}
-			info.seen[ptr] = true
+		var ptr = val.Pointer()
+		if info.seen.push(ptr) != nil {
+			p.buffer[0] = 0
+			n, err = p.writer.Write(p.buffer[:1])
+			p.written += uint64(n)
+			return err
 		}
+		defer info.seen.pop()
 
 		p.buffer[0] = 1
 		n, err = p.writer.Write(p.buffer[:1])
@@ -382,14 +380,14 @@ func (p *packer) encode(data any, info packerInfo) error {
 
 		if objects, ok := p.subobj[info.objects]; ok {
 			for i := 0; i < ln; i++ {
-				err = p.encodeObject(val.Index(i).Interface(), objects, packerInfo{seen: info.dupeSeen()})
+				err = p.encodeObject(val.Index(i).Interface(), objects, packerInfo{seen: info.seen})
 				if err != nil {
 					return err
 				}
 			}
 		} else {
 			for i := 0; i < ln; i++ {
-				err = p.encode(val.Index(i).Interface(), packerInfo{markType: isInterface, seen: info.dupeSeen()})
+				err = p.encode(val.Index(i).Interface(), packerInfo{markType: isInterface, seen: info.seen})
 				if err != nil {
 					return err
 				}
@@ -438,12 +436,12 @@ func (p *packer) encode(data any, info packerInfo) error {
 					curVal = iter.Value()
 				)
 
-				err = p.encode(curKey.Interface(), packerInfo{seen: info.dupeSeen()})
+				err = p.encode(curKey.Interface(), packerInfo{seen: info.seen})
 				if err != nil {
 					return err
 				}
 
-				err = p.encodeObject(curVal.Interface(), objects, packerInfo{seen: info.dupeSeen()})
+				err = p.encodeObject(curVal.Interface(), objects, packerInfo{seen: info.seen})
 				if err != nil {
 					return err
 				}
@@ -455,12 +453,12 @@ func (p *packer) encode(data any, info packerInfo) error {
 					curVal = iter.Value()
 				)
 
-				err = p.encode(curKey.Interface(), packerInfo{seen: info.dupeSeen()})
+				err = p.encode(curKey.Interface(), packerInfo{seen: info.seen})
 				if err != nil {
 					return err
 				}
 
-				err = p.encode(curVal.Interface(), packerInfo{markType: isInterface, seen: info.dupeSeen()})
+				err = p.encode(curVal.Interface(), packerInfo{markType: isInterface, seen: info.seen})
 				if err != nil {
 					return err
 				}
@@ -500,14 +498,14 @@ func (p *packer) encode(data any, info packerInfo) error {
 
 		if objects, ok := p.subobj[info.objects]; ok {
 			for i := 0; i < ln; i++ {
-				err = p.encodeObject(val.Index(i).Interface(), objects, packerInfo{seen: info.dupeSeen()})
+				err = p.encodeObject(val.Index(i).Interface(), objects, packerInfo{seen: info.seen})
 				if err != nil {
 					return err
 				}
 			}
 		} else {
 			for i := 0; i < ln; i++ {
-				err := p.encode(val.Index(i).Interface(), packerInfo{markType: isInterface, seen: info.dupeSeen()})
+				err := p.encode(val.Index(i).Interface(), packerInfo{markType: isInterface, seen: info.seen})
 				if err != nil {
 					return err
 				}
